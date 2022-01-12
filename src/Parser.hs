@@ -1,0 +1,114 @@
+{-# LANGUAGE OverloadedStrings #-}
+module Parser where
+
+import Data.Text (Text, append, cons, pack, unpack)
+import Text.Megaparsec
+import Text.Megaparsec.Char
+import Text.Megaparsec.Debug
+import Data.Void
+import qualified Text.Megaparsec.Char.Lexer as L
+import Control.Monad.Combinators.Expr
+
+import qualified Data.Set as Set
+
+import Ast
+
+type Parser = Parsec Void Text
+
+keywords :: Set.Set Text
+keywords = Set.fromList ["let", "in"]
+
+sc :: Parser ()
+sc = L.space space1 (L.skipLineComment "#") (L.skipBlockComment "#-" "-#")
+
+lexeme :: Parser a -> Parser a
+lexeme = L.lexeme sc
+
+symbol :: Text -> Parser Text
+symbol = L.symbol sc
+
+number :: Parser Float
+number = choice [ try $ lexeme L.float
+                , try $ lexeme L.decimal ]
+
+pIdentifier :: Parser Text
+pIdentifier = do
+    s <- try inner 
+    if Set.member s keywords then fail $ "keyword " ++ unpack s ++ " not allowed here" else return s 
+
+    where
+        collect a b c = cons a $ append b c
+        inner = lexeme  (   collect
+                        <$> letterChar
+                        <*> (pack <$> many alphaNumChar)
+                        <*> (pack <$> many (char '\''))
+                        <?> "variable"
+                        )
+
+
+pVariable :: Parser Expr
+pVariable = Var <$> pIdentifier
+
+
+pNumeric :: Parser Expr
+pNumeric = Const . Num <$> number
+
+parens :: Parser a -> Parser a
+parens = between (symbol "(") (symbol ")")
+
+pTerm :: Parser Expr
+pTerm = choice
+    [ parens pExpr
+    , pLetExpr
+    , pVariable
+    , pNumeric
+    ]
+
+pOpExpr :: Parser Expr
+pOpExpr = makeExprParser pTerm operatorTable where
+    operatorTable =
+      [ [ appl ]
+      , [ prefix "-" Neg
+        , prefix "+" id
+        ]
+      , [ binary "*" (Binop Mult)
+        , binary "/" (Binop Div)
+        ]
+      , [ binary "+" (Binop Plus)
+        , binary "-" (Binop Minus)
+        ]
+      ]
+    appl = InfixL (Call <$ space)
+    space = sc *> notFollowedBy (choice . map symbol $ Set.toList keywords)
+
+pPattern :: Parser Pattern 
+pPattern = PVar <$> pIdentifier
+
+pLetBinding :: Parser LetBinding 
+pLetBinding = choice 
+  [ try $  Simple <$> pPattern <*> (symbol "=" *> pExpr)
+  , try $ FunBinding <$> pIdentifier <*> many pPattern <*> (symbol "=" *> pExpr)]
+
+
+
+pLetExpr :: Parser Expr
+pLetExpr = Let 
+  <$> (symbol "let" *> pLetBinding) 
+  <*> (symbol "in"  *> pExpr)
+
+pExpr :: Parser Expr
+pExpr = pOpExpr
+
+
+binary :: Text -> (Expr -> Expr -> Expr) -> Operator Parser Expr
+binary name f = InfixL (f <$ symbol name)
+
+prefix :: Text -> (Expr -> Expr) -> Operator Parser Expr
+prefix name f = Prefix (f <$ symbol name)
+
+unwrap :: Show a => Either a b -> b 
+unwrap (Left a) = error $ "unwrap called on left: " ++ show a
+unwrap (Right b) = b
+
+fullParse :: Text -> Expr 
+fullParse = unwrap . runParser pExpr ""

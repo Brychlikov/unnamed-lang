@@ -1,0 +1,20 @@
+expr 
+    = const
+    | ident
+    | "(" expr ")"
+    | expr expr 
+    | expr binop expr
+    | "-" expr
+    | "let" let_binding expr "in" expr;
+
+binop = "+" | "-" | "/" | "*";
+
+ident = alpha alphaNum* "'"*;
+
+let_binding 
+    = pattern "=" expr
+    | ident (parameter)+;
+
+const 
+    = digit*
+    | "\"" ( ^\" )*  "\"";

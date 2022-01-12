@@ -1,6 +1,8 @@
-module Ast where
+module Ast.Full where
 
 import Data.Text (Text)
+
+import Ast.Common
 
 data Expr
     = Const Lit
@@ -12,21 +14,6 @@ data Expr
     | Lambda [Pattern] Expr
     deriving (Eq, Show)
 
-data Op
-    = Plus 
-    | Minus
-    | Mult
-    | Div
-    deriving (Eq, Show)
-
-data Lit
-    = Str Text
-    | Num Float
-    deriving (Eq, Show)
-
-data Pattern 
-    = PVar Text 
-    deriving (Eq, Show)
 
 data LetBinding
     = Simple Pattern Expr

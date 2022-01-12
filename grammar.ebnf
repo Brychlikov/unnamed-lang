@@ -5,6 +5,7 @@ expr
     | expr expr 
     | expr binop expr
     | "-" expr
+    | "fun" pattern "->" expr
     | "let" let_binding expr "in" expr;
 
 binop = "+" | "-" | "/" | "*";

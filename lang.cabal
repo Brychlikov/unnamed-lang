@@ -25,7 +25,10 @@ source-repository head
 
 library
   exposed-modules:
-      Ast
+      Ast.Common
+      Ast.Full
+      Ast.Lower
+      Ast.Normal
       Interpreter
       Parser
   other-modules:

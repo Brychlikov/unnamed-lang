@@ -16,7 +16,7 @@ import Ast
 type Parser = Parsec Void Text
 
 keywords :: Set.Set Text
-keywords = Set.fromList ["let", "in"]
+keywords = Set.fromList ["let", "in", "fun"]
 
 sc :: Parser ()
 sc = L.space space1 (L.skipLineComment "#") (L.skipBlockComment "#-" "-#")
@@ -60,6 +60,7 @@ pTerm :: Parser Expr
 pTerm = choice
     [ parens pExpr
     , pLetExpr
+    , pLambda
     , pVariable
     , pNumeric
     ]
@@ -96,6 +97,11 @@ pLetExpr = Let
   <$> (symbol "let" *> pLetBinding) 
   <*> (symbol "in"  *> pExpr)
 
+
+pLambda :: Parser Expr 
+pLambda = Lambda 
+  <$> (symbol "fun" *> some pPattern)
+  <*> (symbol "->"  *> pExpr)
 pExpr :: Parser Expr
 pExpr = pOpExpr
 

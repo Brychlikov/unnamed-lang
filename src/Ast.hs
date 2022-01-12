@@ -9,6 +9,7 @@ data Expr
     | Binop Op Expr Expr 
     | Neg Expr 
     | Let LetBinding Expr
+    | Lambda [Pattern] Expr
     deriving (Eq, Show)
 
 data Op

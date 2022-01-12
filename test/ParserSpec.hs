@@ -44,3 +44,10 @@ spec = describe "Expression parser" $ do
     it "parses function definition" $
         "let f x = x in f 20" `eParsesTo`
         Let (FunBinding "f" [PVar "x"] (Var "x")) (Call (Var "f") (Const $ Num 20))
+
+    it "parses lambdas" $ 
+        "fun x -> x * x" `eParsesTo` Lambda [PVar "x"] (Binop Mult (Var "x") (Var "x"))
+
+    it "parses multi argument lambdas" $ 
+        "fun x y -> x + y" `eParsesTo`
+        Lambda [PVar "x", PVar "y"] (Binop Plus (Var "x") (Var "y"))

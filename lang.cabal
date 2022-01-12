@@ -66,6 +66,7 @@ test-suite lang-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      InterpreterSpec
       ParserSpec
       Paths_lang
   hs-source-dirs:
@@ -86,6 +87,7 @@ test-suite spec
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      InterpreterSpec
       ParserSpec
       Paths_lang
   hs-source-dirs:

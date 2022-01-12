@@ -38,9 +38,15 @@ pIdentifier = do
 
     where
         collect a b c = cons a $ append b c
+
+        legalChars :: Parser Char
+        legalChars = alphaNumChar <|> char '_'
+
+        legalStart :: Parser Char 
+        legalStart = letterChar <|> char '_'
         inner = lexeme  (   collect
-                        <$> letterChar
-                        <*> (pack <$> many alphaNumChar)
+                        <$> legalStart
+                        <*> (pack <$> many legalChars)
                         <*> (pack <$> many (char '\''))
                         <?> "variable"
                         )

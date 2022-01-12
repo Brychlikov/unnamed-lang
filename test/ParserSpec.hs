@@ -18,6 +18,10 @@ spec = describe "Expression parser" $ do
 
     it "parses int arithmethic" $ 
         "2 + 2 * 2" `eParsesTo` Binop Plus (Const $ Num 2) (Binop Mult (Const $ Num 2) (Const $ Num 2))
+
+    it "parses variables with underscore" $ do
+        "under_score" `eParsesTo` Var "under_score"
+        "_x" `eParsesTo` Var "_x"
         
     it "parses single let expressions" $ 
         "let x = 20 in x" `eParsesTo` 

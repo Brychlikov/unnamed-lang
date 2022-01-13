@@ -6,7 +6,8 @@ import Test.Hspec.Megaparsec
 import Text.Megaparsec
 import Data.Text ( Text ) 
 import Parser
-import Ast
+import Ast.Full
+import Ast.Common
 
 eParsesTo :: Text -> Expr -> Expectation
 eParsesTo s ast = parse pExpr "" s `shouldParse` ast

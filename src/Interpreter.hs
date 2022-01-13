@@ -17,6 +17,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class
 import Data.Fix
 import Text.ParserCombinators.ReadP (many1)
+import Ast.Lower (lower)
 
 
 data Value
@@ -28,7 +29,7 @@ data Value
 
 data Clbl
     = Builtin (Value -> IO Value)
-    | Clojure C.Pattern Env A.Expr
+    | Clojure C.Pattern Env (Env2 Value)
 
 instance Eq Clbl where
     f == g = False
@@ -56,6 +57,9 @@ divValues :: Value -> Value -> Value
 divValues (Number x) (Number y) = Number $ x / y
 divValues _ _ = error "type error"
 
+embed :: (Value -> Value -> Value) -> Value
+embed f = Callable $ Builtin (\x -> return $ Callable $ Builtin (return . f x))
+
 negValue :: Value -> Value
 negValue (Number x) = Number $ -x
 negValue _ = error "type error"
@@ -67,25 +71,29 @@ type Env = Map.Map Text Value
 type Env2 = ReaderT (Map.Map Text Value) IO
 
 interpret :: A.Expr -> Env2 Value
-interpret = foldFix eval where 
-    
+interpret = foldFix eval where
+
     eval :: A.ExprF (Env2 Value) -> Env2 Value
     eval (A.Const (C.Num x)) = return $ Number x
     eval (A.Const (C.Str s)) = return $ Str s
     eval (A.Var name)        = asks (fromJust . Map.lookup name)
-    eval (A.Let pat m1 m2)   = do 
+    eval (A.Let pat m1 m2)   = do
         v1 <- m1
         let addBound = Map.union (fromJust $ destructure pat v1)
-        local addBound m2 
-    eval (A.Call m1 m2) = do 
-        v1 <- m1 
-        v2 <- m2 
-        case v1 of 
-            Callable (Builtin g) -> (return . liftIO g) v2
+        local addBound m2
+    eval (A.Call m1 m2) = do
+        v1 <- m1
+        v2 <- m2
+        case v1 of
+            Callable (Builtin g) -> liftIO $ g v2
+            Callable (Clojure pat env body) ->
+                local (const $ Map.union (fromJust $ destructure pat v2) env) body
             _ -> error "called a non-callable"
 
 
-    eval _ = undefined
+    eval (A.Lambda pat m) = do
+        env <- ask
+        return $ Callable $ Clojure pat env  m
 
 
 
@@ -137,11 +145,16 @@ printValue v = do
 
 initEnv :: Env
 initEnv = Map.fromList
-    [ ("print", Callable $ Builtin printValue) ]
+    [ ("print", Callable $ Builtin printValue) 
+    , ("(+)",   embed addValues)
+    , ("(-)",   embed subValues)
+    , ("(*)",   embed multValues)
+    , ("(/)",   embed divValues)
+    ]
 
 unwrap :: Show a => Either a b -> b
 unwrap = either (\a -> error ("Unwrap on Left value: " ++ show a)) id
 
 run :: Text -> IO Value
-run = interpret initEnv . unwrap . runParser Parser.pExpr "repl"
+run = flip runReaderT initEnv . interpret . lower . unwrap . runParser Parser.pExpr "repl"
 

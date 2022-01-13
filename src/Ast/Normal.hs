@@ -1,18 +1,38 @@
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module Ast.Normal where 
 
 import Data.Text(Text)
 
 import Ast.Common
+import Data.Fix
 
-data Expr 
+data ExprF a 
     = Const Lit 
     | Var Text 
-    | Call Expr Expr 
-    | Let LetBinding Expr 
-    | Lambda Pattern Expr
-    deriving (Eq, Show)
+    | Call a a 
+    | Let Pattern a a 
+    | Lambda Pattern a
+    deriving (Eq, Show, Functor, Foldable, Traversable)
 
-data LetBinding 
-    = Simple Pattern  Expr 
-    | FunBinding Text Pattern Expr 
-    deriving (Eq, Show)
+data LetBindingF a
+    = Simple Pattern a
+    | FunBinding Text Pattern a 
+    deriving (Eq, Show, Functor, Foldable, Traversable)
+
+type Expr = Fix ExprF
+
+econst :: Lit -> Expr 
+econst = Fix . Const
+
+evar :: Text -> Expr 
+evar = Fix . Var 
+
+ecall :: Expr -> Expr -> Expr 
+ecall e1 e2 = Fix $ Call e1 e2 
+
+elet :: Pattern ->  Expr -> Expr -> Expr
+elet p b e = Fix $ Let p b e
+
+elambda :: Pattern -> Expr -> Expr
+elambda pat e = Fix $ Lambda pat e
+

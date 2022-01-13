@@ -11,7 +11,8 @@ import Control.Monad.Combinators.Expr
 
 import qualified Data.Set as Set
 
-import Ast
+import Ast.Full
+import Ast.Common
 
 type Parser = Parsec Void Text
 

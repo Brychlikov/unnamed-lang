@@ -27,6 +27,8 @@ dependencies:
 - hspec
 - hspec-megaparsec
 - containers
+- transformers
+- data-fix
 
 library:
   source-dirs: src

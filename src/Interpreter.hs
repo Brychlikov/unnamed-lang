@@ -4,11 +4,19 @@ module Interpreter where
 import Data.Map ((!))
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
-import qualified Ast as A
+import qualified Ast.Normal as A
 import qualified Parser
+import qualified Ast.Common as C
 import Text.Megaparsec (runParser)
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Functor.Identity
+
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.IO.Class
+import Data.Fix
+import Text.ParserCombinators.ReadP (many1)
 
 
 data Value
@@ -20,7 +28,7 @@ data Value
 
 data Clbl
     = Builtin (Value -> IO Value)
-    | Clojure A.Pattern Env A.Expr
+    | Clojure C.Pattern Env A.Expr
 
 instance Eq Clbl where
     f == g = False
@@ -56,57 +64,71 @@ negValue _ = error "type error"
 type Env = Map.Map Text Value
 
 
-interpret :: Env -> A.Expr -> IO Value
+type Env2 = ReaderT (Map.Map Text Value) IO
 
-interpret _env (A.Const (A.Num x)) = return $ Number x
-interpret _env (A.Const (A.Str s)) = return $ Str s
-
-interpret env (A.Var name) = return $ env ! name
-interpret env (A.Call e1 e2) = do
-    v1 <- interpret env e1
-    v2 <-  interpret env e2
-    case v1 of
-        Callable (Builtin g) -> g v2
-        Callable (Clojure pat closedEnv body) -> do
-            let toAdd = fromJust $ destructure pat v2
-            let env' = Map.union toAdd closedEnv
-            interpret env' body
-        _ -> error "called on non-callable"
-
-interpret env (A.Binop op lhs rhs) = do
-    lv <- interpret env lhs
-    rv <- interpret env rhs
-    return $ op_to_func op lv rv where
-
-    op_to_func A.Plus  = addValues
-    op_to_func A.Minus = subValues
-    op_to_func A.Mult  = multValues
-    op_to_func A.Div   = divValues
-
-interpret env (A.Lambda [pat] body) = return $ Callable $ Clojure pat env body
-interpret env (A.Lambda (p:pats) body) = return $ Callable $ Clojure p env (A.Lambda pats body)
-
-interpret env (A.Neg e) = interpret env e >>= (return . negValue)
-
-interpret env (A.Let (A.Simple pat e1) e2) = do
-    v1 <- interpret env e1
-    let toAdd = fromJust $ destructure pat v1
-    let env' = Map.union toAdd env
-    interpret env' e2
-
-interpret env (A.Let (A.FunBinding name [arg] body) e2) = interpret env' e2 where 
-    env' = Map.insert name clo env
-    clo = Callable $ Clojure arg env body
-
-interpret env (A.Let (A.FunBinding name (a:args) body) e2) = interpret env' e2 where 
-    env' = Map.insert name clo env
-    clo = Callable $ Clojure a env (A.Lambda args body)
-
-interpret env _ = undefined
+interpret :: A.Expr -> Env2 Value
+interpret = foldFix eval where 
+    
+    eval :: A.ExprF (Env2 Value) -> Env2 Value
+    eval (A.Const (C.Num x)) = return $ Number x
+    eval (A.Const (C.Str s)) = return $ Str s
+    eval (A.Var name)        = asks (fromJust . Map.lookup name)
+    eval (A.Let pat m1 m2)   = do 
+        v1 <- m1
+        let addBound = Map.union (fromJust $ destructure pat v1)
+        local addBound m2 
+    eval (A.Call m1 m2) = do 
+        v1 <- m1 
+        v2 <- m2 
+        case v1 of 
+            Callable (Builtin g) -> (return . liftIO g) v2
+            _ -> error "called a non-callable"
 
 
-destructure :: A.Pattern -> Value -> Maybe Env
-destructure (A.PVar name) v = Just $ Map.singleton name v
+    eval _ = undefined
+
+
+
+-- interpret :: Env -> A.Expr -> IO Value
+
+-- interpret _env (A.Const (C.Num x)) = return $ Number x
+-- interpret _env (A.Const (C.Str s)) = return $ Str s
+
+-- interpret env (A.Var name) = return $ env ! name
+-- interpret env (A.Call e1 e2) = do
+--     v1 <- interpret env e1
+--     v2 <-  interpret env e2
+--     case v1 of
+--         Callable (Builtin g) -> g v2
+--         Callable (Clojure pat closedEnv body) -> do
+--             let toAdd = fromJust $ destructure pat v2
+--             let env' = Map.union toAdd closedEnv
+--             interpret env' body
+--         _ -> error "called on non-callable"
+
+-- interpret env (A.Lambda [pat] body) = return $ Callable $ Clojure pat env body
+-- interpret env (A.Lambda (p:pats) body) = return $ Callable $ Clojure p env (A.Lambda pats body)
+
+
+-- interpret env (A.Let (A.Simple pat e1) e2) = do
+--     v1 <- interpret env e1
+--     let toAdd = fromJust $ destructure pat v1
+--     let env' = Map.union toAdd env
+--     interpret env' e2
+
+-- interpret env (A.Let (A.FunBinding name [arg] body) e2) = interpret env' e2 where 
+--     env' = Map.insert name clo env
+--     clo = Callable $ Clojure arg env body
+
+-- interpret env (A.Let (A.FunBinding name (a:args) body) e2) = interpret env' e2 where 
+--     env' = Map.insert name clo env
+--     clo = Callable $ Clojure a env (A.Lambda args body)
+
+-- interpret env _ = undefined
+
+
+destructure :: C.Pattern -> Value -> Maybe Env
+destructure (C.PVar name) v = Just $ Map.singleton name v
 
 printValue :: Value -> IO Value
 printValue v = do

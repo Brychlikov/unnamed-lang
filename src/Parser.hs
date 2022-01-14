@@ -36,6 +36,12 @@ number :: Parser Float
 number = choice [ try $ lexeme L.float
                 , try $ lexeme L.decimal ]
 
+stringLiteral :: Parser Text 
+stringLiteral = pack <$> (char '"' >> manyTill L.charLiteral (char '"'))
+
+pString :: Parser Expr 
+pString = Const . Str <$> stringLiteral
+
 pBoolean :: Parser Expr 
 pBoolean = Const . Boolean <$> choice [True <$ symbol "true", False <$ symbol "false"]
 
@@ -79,6 +85,7 @@ pTerm = choice
     , pLambda
     , pVariable
     , pNumeric
+    , pString
     ]
 
 pOpExpr :: Parser Expr

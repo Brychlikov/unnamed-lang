@@ -31,3 +31,6 @@ spec = do
             run "if true then 20 else 30" `shouldReturn` Number 20
         it "runs if branches lazily" $ 
             run "if false then unknown_function 20 else 10" `shouldReturn` Number 10
+    describe "Strings" $ do 
+        it "supports string literals" $
+            run "\"krowa\"" `shouldReturn` Str "krowa"

@@ -12,6 +12,7 @@ data Op
 data Lit
     = Str Text
     | Num Float
+    | Boolean Bool
     deriving (Eq, Show)
 
 data Pattern 

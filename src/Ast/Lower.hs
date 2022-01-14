@@ -33,3 +33,4 @@ lower (F.Lambda pats body) = helper pats (lower body) where
     helper (p:pats) body = elambda p (helper pats body)
     helper [] _ = undefined
 
+lower (F.Cond e1 e2 e3) = econd (lower e1) (lower e2) (lower e3)

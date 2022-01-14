@@ -18,12 +18,14 @@ import Control.Monad.IO.Class
 import Data.Fix
 import Text.ParserCombinators.ReadP (many1)
 import Ast.Lower (lower)
+import Control.Monad.Trans.Except
 
 
 data Value
     = Number Float
     | Str    Text
     | Callable Clbl
+    | Boolean Bool
     | Unit
     deriving (Eq, Show)
 
@@ -66,6 +68,7 @@ negValue _ = error "type error"
 
 
 type Env = Map.Map Text Value
+type Errortype = String
 
 
 type Env2 = ReaderT (Map.Map Text Value) IO
@@ -76,6 +79,7 @@ interpret = foldFix eval where
     eval :: A.ExprF (Env2 Value) -> Env2 Value
     eval (A.Const (C.Num x)) = return $ Number x
     eval (A.Const (C.Str s)) = return $ Str s
+    eval (A.Const (C.Boolean b)) = return $ Boolean b
     eval (A.Var name)        = asks (fromJust . Map.lookup name)
     eval (A.Let pat m1 m2)   = do
         v1 <- m1
@@ -95,8 +99,12 @@ interpret = foldFix eval where
         env <- ask
         return $ Callable $ Clojure pat env  m
 
+    eval (A.Cond mb mt mf) = mb >>= (\x -> if isTruthy x then mt else mf)
 
 
+isTruthy :: Value -> Bool
+isTruthy (Boolean b) = b
+isTruthy _ = False
 
 destructure :: C.Pattern -> Value -> Maybe Env
 destructure (C.PVar name) v = Just $ Map.singleton name v

@@ -26,3 +26,8 @@ spec = do
             run "(fun x y z -> x * y * z) 2 3 4" `shouldReturn` Number 24
         it "supports first-class functions" $ do 
             run "let call_inc f x = f (x+1) in call_inc (fun x -> x) 1" `shouldReturn` Number 2
+    describe "Conditionals" $ do 
+        it "supports basic conditionals" $ 
+            run "if true then 20 else 30" `shouldReturn` Number 20
+        it "runs if branches lazily" $ 
+            run "if false then unknown_function 20 else 10" `shouldReturn` Number 10

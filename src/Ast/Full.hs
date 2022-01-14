@@ -2,7 +2,7 @@ module Ast.Full where
 
 import Data.Text (Text)
 
-import Ast.Common
+import Ast.Common ( Lit, Op, Pattern )
 
 data Expr
     = Const Lit
@@ -12,6 +12,7 @@ data Expr
     | Neg Expr 
     | Let LetBinding Expr
     | Lambda [Pattern] Expr
+    | Cond Expr Expr Expr
     deriving (Eq, Show)
 
 

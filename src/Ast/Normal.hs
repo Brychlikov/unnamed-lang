@@ -12,6 +12,7 @@ data ExprF a
     | Call a a 
     | Let Pattern a a 
     | Lambda Pattern a
+    | Cond a a a 
     deriving (Eq, Show, Functor, Foldable, Traversable)
 
 data LetBindingF a
@@ -35,4 +36,7 @@ elet p b e = Fix $ Let p b e
 
 elambda :: Pattern -> Expr -> Expr
 elambda pat e = Fix $ Lambda pat e
+
+econd :: Expr -> Expr -> Expr -> Expr
+econd e1 e2 e3 = Fix $ Cond e1 e2 e3
 

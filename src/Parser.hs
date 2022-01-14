@@ -2,6 +2,7 @@
 module Parser where
 
 import Data.Text (Text, append, cons, pack, unpack)
+import Data.Functor( ($>), (<$) )
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Debug
@@ -17,7 +18,10 @@ import Ast.Common
 type Parser = Parsec Void Text
 
 keywords :: Set.Set Text
-keywords = Set.fromList ["let", "in", "fun"]
+keywords = Set.fromList ["let", "in", "fun", "if", "then", "else"]
+
+reserved :: Set.Set Text 
+reserved = Set.fromList ["true", "false"]
 
 sc :: Parser ()
 sc = L.space space1 (L.skipLineComment "#") (L.skipBlockComment "#-" "-#")
@@ -31,6 +35,9 @@ symbol = L.symbol sc
 number :: Parser Float
 number = choice [ try $ lexeme L.float
                 , try $ lexeme L.decimal ]
+
+pBoolean :: Parser Expr 
+pBoolean = Const . Boolean <$> choice [True <$ symbol "true", False <$ symbol "false"]
 
 pIdentifier :: Parser Text
 pIdentifier = do
@@ -67,6 +74,8 @@ pTerm :: Parser Expr
 pTerm = choice
     [ parens pExpr
     , pLetExpr
+    , pIfExpr
+    , pBoolean
     , pLambda
     , pVariable
     , pNumeric
@@ -103,6 +112,12 @@ pLetExpr :: Parser Expr
 pLetExpr = Let 
   <$> (symbol "let" *> pLetBinding) 
   <*> (symbol "in"  *> pExpr)
+
+pIfExpr :: Parser Expr 
+pIfExpr = Cond 
+  <$> (symbol "if" *> pExpr)
+  <*> (symbol "then" *> pExpr)
+  <*> (symbol "else" *> pExpr)
 
 
 pLambda :: Parser Expr 

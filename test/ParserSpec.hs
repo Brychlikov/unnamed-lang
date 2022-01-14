@@ -56,3 +56,18 @@ spec = describe "Expression parser" $ do
     it "parses multi argument lambdas" $ 
         "fun x y -> x + y" `eParsesTo`
         Lambda [PVar "x", PVar "y"] (Binop Plus (Var "x") (Var "y"))
+
+    it "parses boolean constants" $ do
+        "true" `eParsesTo` Const (Boolean True)
+        "false" `eParsesTo` Const (Boolean False)
+
+    it "parses if expressions" $ do
+        "if true then 10 else 20" `eParsesTo`
+            Cond (Const $ Boolean True) (Const $ Num 10) (Const $ Num 20)
+        "if foo (2 + 2) false then bar x y z else 20" `eParsesTo`
+            Cond 
+                (Call 
+                    (Call (Var "foo") (Binop Plus (Const $ Num 2) (Const $ Num 2))) 
+                    (Const $ Boolean False))
+                (Call (Call (Call (Var "bar") (Var "x")) (Var "y")) (Var "z"))
+                (Const $ Num 20)

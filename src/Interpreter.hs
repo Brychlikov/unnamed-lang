@@ -97,43 +97,6 @@ interpret = foldFix eval where
 
 
 
--- interpret :: Env -> A.Expr -> IO Value
-
--- interpret _env (A.Const (C.Num x)) = return $ Number x
--- interpret _env (A.Const (C.Str s)) = return $ Str s
-
--- interpret env (A.Var name) = return $ env ! name
--- interpret env (A.Call e1 e2) = do
---     v1 <- interpret env e1
---     v2 <-  interpret env e2
---     case v1 of
---         Callable (Builtin g) -> g v2
---         Callable (Clojure pat closedEnv body) -> do
---             let toAdd = fromJust $ destructure pat v2
---             let env' = Map.union toAdd closedEnv
---             interpret env' body
---         _ -> error "called on non-callable"
-
--- interpret env (A.Lambda [pat] body) = return $ Callable $ Clojure pat env body
--- interpret env (A.Lambda (p:pats) body) = return $ Callable $ Clojure p env (A.Lambda pats body)
-
-
--- interpret env (A.Let (A.Simple pat e1) e2) = do
---     v1 <- interpret env e1
---     let toAdd = fromJust $ destructure pat v1
---     let env' = Map.union toAdd env
---     interpret env' e2
-
--- interpret env (A.Let (A.FunBinding name [arg] body) e2) = interpret env' e2 where 
---     env' = Map.insert name clo env
---     clo = Callable $ Clojure arg env body
-
--- interpret env (A.Let (A.FunBinding name (a:args) body) e2) = interpret env' e2 where 
---     env' = Map.insert name clo env
---     clo = Callable $ Clojure a env (A.Lambda args body)
-
--- interpret env _ = undefined
-
 
 destructure :: C.Pattern -> Value -> Maybe Env
 destructure (C.PVar name) v = Just $ Map.singleton name v

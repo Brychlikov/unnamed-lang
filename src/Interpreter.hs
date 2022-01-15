@@ -18,6 +18,8 @@ import Control.Monad.IO.Class
 import Data.Fix
 import Text.ParserCombinators.ReadP (many1)
 import Ast.Lower (lower)
+import Types
+import Types.Infer
 import Control.Monad.Trans.Except
 
 
@@ -128,4 +130,12 @@ unwrap = either (\a -> error ("Unwrap on Left value: " ++ show a)) id
 
 run :: Text -> IO Value
 run = flip runReaderT initEnv . interpret . lower . unwrap . runParser Parser.pExpr "repl"
+
+runWithType :: Text -> IO Value 
+runWithType s = do 
+    let e = lower $ unwrap $ runParser Parser.pExpr "typedRepl" s
+    case runExcept $ mapTypes e of 
+        Left err -> print err 
+        Right sub -> print sub
+    flip runReaderT initEnv $ interpret e
 

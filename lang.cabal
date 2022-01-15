@@ -31,6 +31,8 @@ library
       Ast.Normal
       Interpreter
       Parser
+      Types
+      Types.Infer
   other-modules:
       Paths_lang
   hs-source-dirs:

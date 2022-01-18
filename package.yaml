@@ -29,6 +29,9 @@ dependencies:
 - containers
 - transformers
 - data-fix
+- free
+- comonad
+- deriving-compat
 
 library:
   source-dirs: src

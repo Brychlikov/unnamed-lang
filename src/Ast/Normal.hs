@@ -1,10 +1,13 @@
-{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, TemplateHaskell #-}
 module Ast.Normal where 
 
 import Data.Text(Text)
 
 import Ast.Common
 import Data.Fix
+import Control.Comonad.Cofree
+import Data.Functor.Classes (Show1)
+import Text.Show.Deriving
 
 data ExprF a 
     = Const Lit 
@@ -13,14 +16,21 @@ data ExprF a
     | Let Pattern a a 
     | Lambda Pattern a
     | Cond a a a 
-    deriving (Eq, Show, Functor, Foldable, Traversable)
+    deriving (Eq, Show, Functor, Foldable)
+$(deriveShow1 ''ExprF)
 
 data LetBindingF a
     = Simple Pattern a
     | FunBinding Text Pattern a 
-    deriving (Eq, Show, Functor, Foldable, Traversable)
+    deriving (Eq, Show, Functor, Foldable)
 
 type Expr = Fix ExprF
+type AnnotatedExpr a = Cofree ExprF a
+
+coerceAnnotation :: Expr -> AnnotatedExpr () 
+coerceAnnotation = foldFix ann where 
+    ann :: ExprF (AnnotatedExpr () ) -> AnnotatedExpr () 
+    ann e = () :< e
 
 econst :: Lit -> Expr 
 econst = Fix . Const

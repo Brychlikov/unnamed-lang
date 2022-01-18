@@ -41,8 +41,11 @@ library
       OverloadedStrings
   build-depends:
       base >=4.7 && <5
+    , comonad
     , containers
     , data-fix
+    , deriving-compat
+    , free
     , hspec
     , hspec-megaparsec
     , megaparsec >=9.2.0
@@ -60,8 +63,11 @@ executable lang-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , comonad
     , containers
     , data-fix
+    , deriving-compat
+    , free
     , hspec
     , hspec-megaparsec
     , lang
@@ -83,8 +89,11 @@ test-suite lang-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , comonad
     , containers
     , data-fix
+    , deriving-compat
+    , free
     , hspec
     , hspec-megaparsec
     , lang
@@ -105,8 +114,11 @@ test-suite spec
       test
   build-depends:
       base >=4.7 && <5
+    , comonad
     , containers
     , data-fix
+    , deriving-compat
+    , free
     , hspec ==2.*
     , hspec-megaparsec
     , lang

@@ -134,7 +134,7 @@ run = flip runReaderT initEnv . interpret . lower . unwrap . runParser Parser.pE
 runWithType :: Text -> IO Value 
 runWithType s = do 
     let e = lower $ unwrap $ runParser Parser.pExpr "typedRepl" s
-    case runExcept $ mapTypes e of 
+    case runExcept $ typeExpr e of 
         Left err -> print err 
         Right sub -> print sub
     flip runReaderT initEnv $ interpret e

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 module Types.Infer where
 
 import qualified Data.Map as Map
@@ -14,13 +15,20 @@ import Data.Text (Text)
 import Control.Monad.Trans.Class (lift)
 import qualified Control.Monad.Trans.State as S
 import Text.Printf (printf)
+import Control.Comonad.Cofree (ComonadCofree(unwrap), Cofree ((:<)), section)
+import Control.Comonad (extract)
+import Debug.Trace
 
 type Var = Text
 
-newtype TypeEnv = TypeEnv (Map.Map Var Type)
+newtype TypeEnv = TypeEnv (Map.Map Var Type) deriving Show
+
+traceMsg :: Show a => String -> a -> a 
+-- traceMsg s a = trace (s ++ show a) a
+traceMsg s a = a
 
 extend :: TypeEnv -> (Var, Type) -> TypeEnv
-extend (TypeEnv env) (x, t) = TypeEnv $ Map.insert x t env
+extend (TypeEnv env) (x, t) = traceMsg "after add" $ TypeEnv $ Map.insert (traceMsg "variable added" x) t (traceMsg "before add" env)
 
 emptyEnv :: TypeEnv
 emptyEnv = TypeEnv Map.empty
@@ -28,7 +36,7 @@ emptyEnv = TypeEnv Map.empty
 lookupEnv :: Var -> Infer Type
 lookupEnv v = do
     (TypeEnv env) <- ask
-    let res = Map.lookup v env
+    let res = Map.lookup (traceMsg "variable looked up" v) (traceMsg "in env" env)
     case res of
         Just (TScheme s) -> instantiate s
         Just t -> return t
@@ -110,6 +118,12 @@ instance Substitutable a => Substitutable [a] where
     apply = fmap . apply
     ftv = foldr (Set.union . ftv ) Set.empty
 
+instance Substitutable (Cofree ExprF Type) where 
+    apply = fmap . apply 
+    -- Cofree ExprF SV
+    ftv = foldMap ftv
+
+
 instance Substitutable TypeEnv where
     apply s (TypeEnv env) = TypeEnv $ Map.map (apply s) env
     ftv (TypeEnv env) = ftv $ Map.elems env
@@ -132,47 +146,87 @@ generalize env t = Forall frees t
 
 inExtended :: (Var, Type) -> Infer a -> Infer a
 inExtended (x, t) m = do
-    let modScope env = extend env (x, t)
+    let modScope env = traceMsg "inExtended modified env to:" $ extend env (x, t)
     local modScope m
 
-litType :: Lit -> Infer Type
-litType (Str _    ) = return TString
-litType (Num _    ) = return TNum
-litType (Boolean _) = return TBool
+litType :: Lit -> Type
+litType (Str _    ) = TString
+litType (Num _    ) = TNum
+litType (Boolean _) = TBool
 
-infer :: Expr -> Infer Type
-infer = foldFix collect where
-    collect :: ExprF (Infer Type) -> Infer Type
+-- infer, but sad and basic :(
+inferSB :: Expr -> Infer (AnnotatedExpr Type)
+inferSB = inner . unwrap . coerceAnnotation where 
 
-    collect (Const lit) = litType lit
-    collect (Var name)  = lookupEnv name
-    collect (Call m1 m2) = do
-        t1 <- m1
-        t2 <- m2
-        tv <- fresh
-        t1 ~~ TArr t2 tv
-        return tv
+    inner :: ExprF (Cofree ExprF ()) -> Infer (Cofree ExprF Type)
+    inner (Const lit) = return $ litType lit :< Const lit
+    inner (Var name) = do 
+        t <- lookupEnv name 
+        return $ t :< Var name
+    inner (Call e1 e2) = do 
+        sub1@(ty1 :< tr1) <- inner (unwrap e1) 
+        sub2@(ty2 :< tr2) <- inner (unwrap e2) 
+        tv <- fresh 
+        ty1 ~~ TArr ty2 tv 
+        let tree = Call sub1 sub2
+        return $ tv :< tree
 
-    collect (Let (PVar x) m1 m2) = do
-        env <- ask
-        t1 <- m1
-        let schema = generalize env t1
-        inExtended (x, TScheme schema) m2
+    inner (Let (PVar x) e1 e2) = do 
+        env <- ask 
+        binder@(t1 :< _) <- inner (unwrap e1)
+        let schema = generalize env t1 
+        res@(rt :< _) <- inExtended (x, TScheme schema) (inner $ unwrap e2)
+        return $ rt :< Let (PVar x) binder res
+    
+    inner (Lambda (PVar x) e) = do 
+        tp <- fresh 
+        res@(rt :< _) <- inExtended (x, tp) (inner $ unwrap e)
+        return $ rt :< Lambda (PVar x) res
+    
+    inner (Cond ec et ef) = do 
+        trcond@(tc :< _) <- inner $ unwrap ec
+        trtrue@(tt :< _) <- inner $ unwrap et
+        trfalse@(tf :< _) <- inner $ unwrap ef
+        tc ~~ TBool
+        tt ~~ tf 
+        return $ tt :< Cond trcond trtrue trfalse
 
-    -- collect (Let _ _ _) = lift $ throwE $ MiscError "TODO"
 
-    collect (Lambda (PVar x) m) = do 
-        targ <- fresh
-        tres <- inExtended (x, targ) m 
-        return $ TArr targ tres
+-- infer :: Expr -> Infer (AnnotatedExpr Type)
+-- infer = undefined . annotate' func . coerceAnnotation where
+--     func :: ExprF (AnnotatedExpr (Infer Type)) -> Infer Type
+--     func = collect . fmap extract
+--     collect :: ExprF (Infer Type) -> Infer Type
 
-    collect (Cond mc mt mf) = do 
-        tcond <- mc 
-        ttrue <- mt 
-        tfalse <- mf 
-        tcond ~~ TBool 
-        ttrue ~~ tfalse 
-        return ttrue
+--     collect (Const lit) = litType lit
+--     collect (Var name)  = lookupEnv name
+--     collect (Call m1 m2) = do
+--         t1 <- m1
+--         t2 <- m2
+--         tv <- fresh
+--         t1 ~~ TArr t2 tv
+--         return tv
+
+--     collect (Let (PVar x) m1 m2) = do
+--         env <- ask
+--         t1 <- m1
+--         let schema = generalize env t1
+--         inExtended (x, TScheme schema) m2
+
+--     -- collect (Let _ _ _) = lift $ throwE $ MiscError "TODO"
+
+--     collect (Lambda (PVar x) m) = do 
+--         targ <- fresh
+--         tres <- inExtended (x, targ) m 
+--         return $ TArr targ tres
+
+--     collect (Cond mc mt mf) = do 
+--         tcond <- mc 
+--         ttrue <- mt 
+--         tfalse <- mf 
+--         tcond ~~ TBool 
+--         ttrue ~~ tfalse 
+--         return ttrue
 
 runInfer :: Infer a -> Except TypeError ([Constraint], a)
 runInfer i = do 
@@ -220,9 +274,15 @@ runSolver :: [Constraint] ->  Except TypeError Subst
 runSolver constraints = fst <$> S.runStateT solver (emptySubst, constraints)
 
 
-mapTypes :: Expr -> Except TypeError Subst
-mapTypes e = do 
-    (constraints, t) <- runInfer $ infer e
-    runSolver constraints
+-- mapTypes :: Expr -> Except TypeError Subst
+-- mapTypes e = do 
+--     (constraints, t) <- runInfer $ infer e
+--     runSolver constraints
+
+typeExpr :: Expr -> Except TypeError TypedExpr 
+typeExpr e = do
+    (constraints, tree) <- runInfer $ inferSB e
+    subst <- runSolver (traceShowId constraints)
+    return $ apply subst tree
 
     

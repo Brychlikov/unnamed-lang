@@ -37,7 +37,7 @@ traceMsgWith' f msg a = trace (unpack (msg `T.append` ": " `T.append` f a)) a
 
 
 extend :: TypeEnv -> (Var, Type) -> TypeEnv
-extend (TypeEnv env) (x, t) = traceMsg "after add" $ TypeEnv $ Map.insert (traceMsg "variable added" x) t (traceMsg "before add" env)
+extend (TypeEnv env) (x, t) = TypeEnv $ Map.insert x t env
 
 emptyEnv :: TypeEnv
 emptyEnv = TypeEnv Map.empty
@@ -53,7 +53,7 @@ startingEnv = TypeEnv $ Map.fromList
 lookupEnv :: Var -> Infer Type
 lookupEnv v = do
     (TypeEnv env) <- ask
-    let res = Map.lookup (traceMsg "variable looked up" v) (traceMsg "in env" env)
+    let res = Map.lookup v env
     case res of
         Just (TScheme s) -> instantiate s
         Just t -> return t
@@ -101,7 +101,6 @@ type Infer  = (RWST
                 )
 
 (~~) :: Type -> Type -> Infer ()
--- t1 ~~ t2 = tell (trace ("generated a constraint: " ++ displayConstraint (t1, t2))  [(t1, t2)])
 t1 ~~ t2 = tell   [(t1, t2)]
 
 fresh :: Infer Type
@@ -184,7 +183,7 @@ generalize env t = Forall frees t
 
 inExtended :: (Var, Type) -> Infer a -> Infer a
 inExtended (x, t) m = do
-    let modScope env = traceMsg "inExtended modified env to:" $ extend env (x, t)
+    let modScope env = extend env (x, t)
     local modScope m
 
 litType :: Lit -> Type
@@ -212,8 +211,8 @@ inferSB = inner . unwrap . coerceAnnotation where
     inner (Let (PVar x) e1 e2) = do 
         env <- ask 
         binder@(t1 :< _) <- inner (unwrap e1)
-        let schema = generalize env (traceMsgWith' (toStrict . pShow) "generalizing" t1 )
-        res@(rt :< _) <- inExtended (x, TScheme (traceMsgWith show "Generalized a schema" schema)) (inner $ unwrap e2)
+        let schema = generalize env t1
+        res@(rt :< _) <- inExtended (x, TScheme schema) (inner $ unwrap e2)
         return $ rt :< Let (PVar x) binder res
     
     inner (Lambda (PVar x) e) = do 
@@ -297,11 +296,7 @@ unifyMany (t1: ts1) (t2 : ts2)  = do
     (unis, constraints) <- unifyMany ts1 ts2 
     let newSubst = compose uni unis
         newConstraint = constraint ++ constraints
-    let tup = trace msg (newSubst, newConstraint) 
-        msg = "finished unification of " ++ displayConstraints (zip (t1:ts1) (t2:ts2)) ++ "\n" ++ 
-              "generated substitutions are: " ++ spShow newSubst ++ 
-              "generated constraints are: " ++ spShow newConstraint
-
+    let tup = (newSubst, newConstraint) 
     return tup
 unifyMany t1 t2 = lift $ throwE $ UnificationMismatch t1 t2
 
@@ -315,16 +310,15 @@ solver = do
     case constraints of 
         [] -> return subst 
         ((t1, t2) : constraints') -> do 
-            (subst2, constraints2) <- unifies t1 (trace ("solving for " ++ displayConstraint (t1, t2)) t2)
-            let newSubstitution = traceMsgWith spShow  "New, composed subst" $ compose (traceMsgWith spShow "!!!solved subst" subst2) subst
-            let oldConstraints = traceMsgWith spShow "Old constrs, after applying" $ apply newSubstitution (traceMsgWith spShow "Old constrs, before applying" constraints')
-            let newConstraints = traceMsgWith spShow "New constrs, after appending" $ constraints2 ++ oldConstraints
+            (subst2, constraints2) <- unifies t1 t2
+            let newSubstitution = compose subst2 subst
+            let oldConstraints = apply newSubstitution constraints'
+            let newConstraints = constraints2 ++ oldConstraints
             S.put (newSubstitution, newConstraints)
             solver
 
 runSolver :: [Constraint] ->  Except TypeError Subst 
-runSolver constraints = loudFst <$> S.runStateT solver (emptySubst, constraints)
-    where loudFst (x, y) = trace ("Constraints after solution: " ++ spShow y) x
+runSolver constraints = fst <$> S.runStateT solver (emptySubst, constraints)
 
 
 -- mapTypes :: Expr -> Except TypeError Subst
@@ -336,7 +330,7 @@ runSolver constraints = loudFst <$> S.runStateT solver (emptySubst, constraints)
 typeExpr :: Expr -> Except TypeError TypedExpr 
 typeExpr e = do
     (constraints, tree) <- runInfer $ inferSB e
-    subst <- runSolver (traceMsgWith displayConstraints "Generated constraints" constraints)
-    return $ apply (traceMsgWith show "Solved substitution" subst) (traceMsgWith show "AnnotatedTree" tree)
+    subst <- runSolver constraints
+    return $ apply subst tree
 
     

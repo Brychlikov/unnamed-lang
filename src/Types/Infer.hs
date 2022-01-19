@@ -44,7 +44,18 @@ lookupEnv v = do
 
 newtype InferState = InferState Int
 
+displayType :: Type -> String 
+displayType (TVar x) = "\"" ++ show x ++ "\""
+displayType TNum= "Num"
+displayType TBool = "Boolean"
+displayType TString = "Str"
+displayType (TScheme s) = show s
+displayType (TArr t1 t2) = "(" ++ displayType t1 ++ "->" ++ displayType t2 ++ ")"
+
 type Constraint = (Type, Type)
+
+displayConstraint :: Constraint -> String 
+displayConstraint (t1, t2) = displayType t1  ++ "~~" ++ displayType t2
 
 data TypeError
     = TypeMismatch Type Type
@@ -282,7 +293,12 @@ runSolver constraints = fst <$> S.runStateT solver (emptySubst, constraints)
 typeExpr :: Expr -> Except TypeError TypedExpr 
 typeExpr e = do
     (constraints, tree) <- runInfer $ inferSB e
+<<<<<<< HEAD
     subst <- runSolver (traceShowId constraints)
     return $ apply subst tree
+=======
+    subst <- runSolver constraints
+    return $ apply (traceShowId subst) tree
+>>>>>>> 72d7794d2e0c3954312daa0a7dbfd96347da6ade
 
     

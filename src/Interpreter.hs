@@ -22,6 +22,8 @@ import Types
 import Types.Infer
 import Control.Monad.Trans.Except
 
+import Text.Pretty.Simple
+
 
 data Value
     = Number Float
@@ -136,6 +138,6 @@ runWithType s = do
     let e = lower $ unwrap $ runParser Parser.pExpr "typedRepl" s
     case runExcept $ typeExpr e of 
         Left err -> print err 
-        Right sub -> print sub
+        Right sub -> pPrint sub
     flip runReaderT initEnv $ interpret e
 

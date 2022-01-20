@@ -254,6 +254,14 @@ inferSB = inner . unwrap . coerceAnnotation where
         tt ~~ tf 
         return $ tt :< Cond trcond trtrue trfalse
 
+    inner (LFix e) = do 
+        trlam@(ltype :< _) <- inner $ unwrap e
+        tres <- fresh 
+        ltype ~~ TArr (TArr tres tres) tres
+        return $ tres :< LFix trlam
+
+
+
 
 -- infer :: Expr -> Infer (AnnotatedExpr Type)
 -- infer = undefined . annotate' func . coerceAnnotation where

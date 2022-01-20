@@ -14,6 +14,7 @@ data ExprF a
     | Var Text 
     | Call a a 
     | Let Pattern a a 
+    | LFix a
     | Lambda Pattern a
     | Cond a a a 
     deriving (Eq, Show, Functor, Foldable)
@@ -50,3 +51,6 @@ elambda pat e = Fix $ Lambda pat e
 econd :: Expr -> Expr -> Expr -> Expr
 econd e1 e2 e3 = Fix $ Cond e1 e2 e3
 
+
+elfix :: Expr -> Expr 
+elfix e = Fix $ LFix e

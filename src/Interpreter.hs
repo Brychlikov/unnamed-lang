@@ -50,7 +50,7 @@ instance Show Clbl where
 addValues :: Value -> Value -> Value
 addValues (Number x) (Number y) = Number $ x + y
 addValues (Str s) (Str s') = Str $ T.append s s'
-addValues _ _ = error "type error"
+addValues v1 v2 = error ("Can't add values: " ++ show v1 ++ " and " ++ show v2)
 
 multValues :: Value -> Value -> Value
 multValues (Number x) (Number y) = Number $ x * y
@@ -94,6 +94,17 @@ type Errortype = String
 
 type Env2 = ReaderT (Map.Map Text Value) (ExceptT Errortype IO)
 
+call :: Env2 Value -> Env2 Value -> Env2 Value 
+call = do 
+    v1 <- m1
+    v2 <- m2
+    case v1 of
+        Callable (Builtin g) -> liftIO $ g v2
+        Callable (Clojure pat env body) ->
+            local (const $ Map.union (fromJust $ destructure pat v2) env) body
+        _ -> error "sadly, you called a non-callable :("
+
+
 interpret :: A.Expr -> Env2 Value
 interpret = foldFix eval where
 
@@ -108,6 +119,7 @@ interpret = foldFix eval where
         v1 <- m1
         let addBound = Map.union (fromJust $ destructure pat v1)
         local addBound m2
+
     eval (A.Call m1 m2) = do
         v1 <- m1
         v2 <- m2
@@ -121,6 +133,12 @@ interpret = foldFix eval where
     eval (A.Lambda pat m) = do
         env <- ask
         return $ Callable $ Clojure pat env  m
+
+    eval (A.LFix m) = do
+        Callable (Clojure (C.PVar name) env m') <- m
+        resm where  
+        resm = resm >>= \c -> local (const $ Map.insert name c env) m'
+
 
     eval (A.Cond mb mt mf) = mb >>= (\x -> if isTruthy x then mt else mf)
 

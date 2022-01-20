@@ -14,6 +14,7 @@ lower (F.Binop op e1 e2) = ecall (ecall (evar $ op_to_name op) (lower e1)) (lowe
     op_to_name Minus = "(-)"
     op_to_name Mult  = "(*)"
     op_to_name Div   = "(/)"
+    op_to_name Pair  = "(,)"
 
 lower (F.Neg e) = ecall (evar "negate") (lower e)
 

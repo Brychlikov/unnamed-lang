@@ -30,7 +30,11 @@ spec = do
         it "supports basic conditionals" $ 
             run "if true then 20 else 30" `shouldReturn` Number 20
         it "runs if branches lazily" $ 
-            run "if false then unknown_function 20 else 10" `shouldReturn` Number 10
+            run "if false then magic 20 else 10" `shouldReturn` Number 10
     describe "Strings" $ do 
         it "supports string literals" $
             run "\"krowa\"" `shouldReturn` Str "krowa"
+
+    describe "Pairs" $ do
+        it "supports pair construction" $ 
+            run "2, 2" `shouldReturn` Tuple (Number 2, Number 2)

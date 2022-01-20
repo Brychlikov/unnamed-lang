@@ -77,3 +77,12 @@ spec = describe "Expression parser" $ do
 
     it "parses (some) escapes" $ 
         "\"\\nkrowa\\t\"" `eParsesTo` Const (Str "\nkrowa\t")
+
+    it "parses pairs" $ do 
+        "2, 2" `eParsesTo` Binop Pair (Const $ Num 2) (Const $ Num 2)
+        "1 + 2, 3, 4" `eParsesTo`
+            Binop Pair 
+                  (Binop Plus (Const $ Num 1) (Const $ Num 2))
+                  (Binop Pair (Const $ Num 3) 
+                              (Const $ Num 4))
+

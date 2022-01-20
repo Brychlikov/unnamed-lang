@@ -42,12 +42,23 @@ extend (TypeEnv env) (x, t) = TypeEnv $ Map.insert x t env
 emptyEnv :: TypeEnv
 emptyEnv = TypeEnv Map.empty
 
+tupleApplication :: Type -> Type -> Type 
+tupleApplication t1 t2 = TApp (TApp (TCon tup) t1) t2
+
 startingEnv :: TypeEnv
 startingEnv = TypeEnv $ Map.fromList 
     [ ("(+)", TArr TNum (TArr TNum TNum))
     , ("(-)", TArr TNum (TArr TNum TNum))
     , ("(*)", TArr TNum (TArr TNum TNum))
     , ("(/)", TArr TNum (TArr TNum TNum))
+    , ("(,)", TScheme (Forall [TV "a", TV "b"] 
+                              (TArr (TVar $ TV "a") 
+                                    (TArr (TVar $ TV "b") 
+                                          (tupleApplication (TVar $ TV "a") (TVar $ TV "b") )))))
+    , ("magic", TScheme (Forall [TV "a", TV "b"] 
+                              (TArr (TVar $ TV "a") 
+                                    (TVar $ TV "b") )))
+                                          
     ]
 
 lookupEnv :: Var -> Infer Type
@@ -61,6 +72,10 @@ lookupEnv v = do
 
 newtype InferState = InferState Int
 
+displayKind :: Kind -> String 
+displayKind KType = "*"
+displayKind (KArr k1 k2) = "(" ++ displayKind k1 ++ " => " ++ displayKind k2 ++ ")"
+
 displayType :: Type -> String 
 displayType (TVar (TV x)) =  x 
 displayType TNum= "Num"
@@ -68,6 +83,8 @@ displayType TBool = "Boolean"
 displayType TString = "Str"
 displayType (TScheme s) = show s
 displayType (TArr t1 t2) = "(" ++ displayType t1 ++ "->" ++ displayType t2 ++ ")"
+displayType (TCon constr) = name constr ++ "[" ++ displayKind (kind constr) ++ "]"
+displayType (TApp t1 t2) = "(" ++ displayType t1 ++  " , " ++ displayType t2 ++ ")"
 
 type Constraint = (Type, Type)
 
@@ -130,6 +147,8 @@ instance Substitutable Type where
     apply s t@(TVar a) = Map.findWithDefault t a s
     apply s (TScheme sc) = TScheme $ apply s sc
     apply s (TArr t1 t2) = TArr (apply s t1) (apply s t2)
+    apply s (TCon c) = TCon c
+    apply s (TApp t1 t2) = TApp (apply s t1) (apply s t2)
 
     ftv TNum  = Set.empty
     ftv TBool   = Set.empty
@@ -138,6 +157,9 @@ instance Substitutable Type where
     ftv (TVar a) = Set.singleton a
     ftv (TScheme sc) = ftv sc
     ftv (TArr t1 t2) = ftv t1 `Set.union` ftv t2
+    ftv (TCon _) = Set.empty 
+    -- TODO: Something fishy here, don't know how type applications should work yet
+    ftv (TApp t1 t2) = ftv t1 `Set.union` ftv t2
 
 instance Substitutable Scheme where
     apply s (Forall frees t) = Forall frees (apply s' t)
@@ -287,6 +309,7 @@ unifies t1 t2 | t1 == t2  = return emptyUnifier
 unifies (TVar a) t = bind a t
 unifies t (TVar a) = bind a t
 unifies (TArr t1 t2) (TArr t3 t4) = unifyMany [t1, t2] [t3, t4]
+unifies (TApp t1 t2) (TApp t3 t4) = unifyMany [t1, t2] [t3, t4]
 unifies t1 t2 = lift $ throwE $ UnificationFail t1 t2
 
 unifyMany :: [Type] -> [Type] -> Solve Unifier 

@@ -23,6 +23,7 @@ import Types.Infer
 import Control.Monad.Trans.Except
 
 import Text.Pretty.Simple
+import Data.Function (on)
 
 
 data Value
@@ -31,6 +32,7 @@ data Value
     | Callable Clbl
     | Boolean Bool
     | Unit
+    | Tuple (Value, Value)
     deriving (Eq, Show)
 
 data Clbl
@@ -63,6 +65,15 @@ divValues :: Value -> Value -> Value
 divValues (Number x) (Number y) = Number $ x / y
 divValues _ _ = error "type error"
 
+tupleValues :: Value -> Value -> Value
+tupleValues v1 v2 = Tuple (v1, v2)
+
+magicValues :: Value -> Value
+magicValues v = error "No magic allowed, sorry"
+
+embed1 :: (Value -> Value) -> Value 
+embed1 f = Callable $ Builtin (return . f)
+
 embed :: (Value -> Value -> Value) -> Value
 embed f = Callable $ Builtin (\x -> return $ Callable $ Builtin (return . f x))
 
@@ -75,7 +86,7 @@ type Env = Map.Map Text Value
 type Errortype = String
 
 
-type Env2 = ReaderT (Map.Map Text Value) IO
+type Env2 = ReaderT (Map.Map Text Value) (ExceptT Errortype IO)
 
 interpret :: A.Expr -> Env2 Value
 interpret = foldFix eval where
@@ -84,7 +95,9 @@ interpret = foldFix eval where
     eval (A.Const (C.Num x)) = return $ Number x
     eval (A.Const (C.Str s)) = return $ Str s
     eval (A.Const (C.Boolean b)) = return $ Boolean b
-    eval (A.Var name)        = asks (fromJust . Map.lookup name)
+    eval (A.Var name)        = asks (Map.lookup name) >>= help
+        where help (Just v) = return v
+              help Nothing  = lift $ throwE $ "Unbound variable: " ++ show name
     eval (A.Let pat m1 m2)   = do
         v1 <- m1
         let addBound = Map.union (fromJust $ destructure pat v1)
@@ -120,24 +133,29 @@ printValue v = do
 
 initEnv :: Env
 initEnv = Map.fromList
-    [ ("print", Callable $ Builtin printValue) 
+    [ ("print", Callable $ Builtin printValue)
     , ("(+)",   embed addValues)
     , ("(-)",   embed subValues)
     , ("(*)",   embed multValues)
     , ("(/)",   embed divValues)
+    , ("(,)",   embed tupleValues)
+    , ("magic", embed1 magicValues)
     ]
 
 unwrap :: Show a => Either a b -> b
 unwrap = either (\a -> error ("Unwrap on Left value: " ++ show a)) id
 
-run :: Text -> IO Value
-run = flip runReaderT initEnv . interpret . lower . unwrap . runParser Parser.pExpr "repl"
 
-runWithType :: Text -> IO Value 
-runWithType s = do 
+
+run :: Text -> IO Value
+run s = do
     let e = lower $ unwrap $ runParser Parser.pExpr "typedRepl" s
-    case runExcept $ typeExpr e of 
-        Left err -> print err 
-        Right sub -> pPrint sub
-    flip runReaderT initEnv $ interpret e
+    case runExcept $ typeExpr e of
+        Left err -> print err >> return Unit
+        Right sub -> do
+            pPrint sub
+            res <- runExceptT $ flip runReaderT initEnv $ interpret e
+            case res of
+                Right v -> return v
+                Left err -> putStrLn err >> return Unit
 

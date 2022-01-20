@@ -7,6 +7,7 @@ data Op
     | Minus
     | Mult
     | Div
+    | Pair
     deriving (Eq, Show)
 
 data Lit

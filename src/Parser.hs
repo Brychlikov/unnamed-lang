@@ -101,9 +101,15 @@ pOpExpr = makeExprParser pTerm operatorTable where
       , [ binary "+" (Binop Plus)
         , binary "-" (Binop Minus)
         ]
+      , [ InfixR (Binop Pair <$ symbol ",")
+        ]
       ]
     appl = InfixL (Call <$ space)
     space = sc *> notFollowedBy (choice . map symbol $ Set.toList keywords)
+
+binary :: Text -> (Expr -> Expr -> Expr) -> Operator Parser Expr
+binary name f = InfixL (f <$ symbol name)
+
 
 pPattern :: Parser Pattern 
 pPattern = PVar <$> pIdentifier
@@ -134,9 +140,6 @@ pLambda = Lambda
 pExpr :: Parser Expr
 pExpr = pOpExpr
 
-
-binary :: Text -> (Expr -> Expr -> Expr) -> Operator Parser Expr
-binary name f = InfixL (f <$ symbol name)
 
 prefix :: Text -> (Expr -> Expr) -> Operator Parser Expr
 prefix name f = Prefix (f <$ symbol name)

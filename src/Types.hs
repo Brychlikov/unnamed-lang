@@ -11,6 +11,23 @@ newtype TVar = TV String
 data Scheme = Forall [TVar] Type
     deriving (Show, Eq, Ord)
 
+data Kind 
+    = KType 
+    | KArr Kind Kind
+    deriving (Show, Eq, Ord)
+
+
+data Constructor = Constructor 
+    { name :: String
+    , kind :: Kind
+    } deriving (Show, Eq, Ord)
+
+tup :: Constructor 
+tup = Constructor 
+    { name = "(,)"
+    , kind = KType `KArr` (KType `KArr` KType)
+} 
+
 data Type
     = TNum
     | TBool
@@ -18,6 +35,8 @@ data Type
     | TVar TVar
     | TScheme Scheme
     | TArr Type Type
+    | TCon Constructor
+    | TApp Type Type
     deriving (Show, Eq, Ord)
 
 

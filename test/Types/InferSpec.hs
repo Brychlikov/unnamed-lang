@@ -50,4 +50,9 @@ spec = do
         "let f x y z = x + y in let y = f 0 0 0 in f 0 0 true" `shouldType` TNum
         "let f x = x in f" `shouldType`
             TScheme (Forall [TV "x"] (TArr (TVar $ TV "x") (TVar $ TV "x")))
+
+    it "types recursive functions" $ do
+        "let sum n = if n == 0 then 0 else n + sum (n-1) in sum" `shouldType` TArr TNum TNum
+        "let fib n = if n == 0 then 0 else (if n == 1 then 1 else (fib (n-1)) + fib (n-2) in fib"
+            `shouldType` TArr TNum (TArr TNum TNum)
     

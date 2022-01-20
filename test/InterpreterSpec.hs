@@ -38,3 +38,13 @@ spec = do
     describe "Pairs" $ do
         it "supports pair construction" $ 
             run "2, 2" `shouldReturn` Tuple (Number 2, Number 2)
+
+    describe "Equality" $ do 
+        it "supports basic equality" $ do
+            run "2 == 2" `shouldReturn` Boolean True
+            run "1 == 2" `shouldReturn` Boolean False
+
+        it "supports structural equality on pairs" $ do
+            run "(1, 2) == (1, 2)" `shouldReturn` Boolean True
+            run "(1, 2) != (1, 2)" `shouldReturn` Boolean False
+            run "(1, (1, 2)) != (1, (1, 3))" `shouldReturn` Boolean True

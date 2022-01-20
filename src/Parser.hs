@@ -101,6 +101,9 @@ pOpExpr = makeExprParser pTerm operatorTable where
       , [ binary "+" (Binop Plus)
         , binary "-" (Binop Minus)
         ]
+      , [ binary "==" (Binop EqEq)
+        , binary "!=" (Binop Neq)
+        ]
       , [ InfixR (Binop Pair <$ symbol ",")
         ]
       ]

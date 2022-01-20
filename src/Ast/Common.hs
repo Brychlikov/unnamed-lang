@@ -8,6 +8,8 @@ data Op
     | Mult
     | Div
     | Pair
+    | EqEq 
+    | Neq
     deriving (Eq, Show)
 
 data Lit

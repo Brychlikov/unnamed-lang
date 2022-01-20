@@ -20,6 +20,21 @@ spec = describe "Expression parser" $ do
     it "parses int arithmethic" $
         "2 + 2 * 2" `eParsesTo` Binop Plus (Const $ Num 2) (Binop Mult (Const $ Num 2) (Const $ Num 2))
 
+    it "parses boolean operators" $ do 
+        "1 == 0" `eParsesTo` Binop EqEq (Const $ Num 1) (Const $ Num 0)
+        "1 != 0" `eParsesTo` Binop Neq (Const $ Num 1) (Const $ Num 0)
+
+    it "parses boolean operators with correct precedence" $ do 
+        "1 + 1 == 2" `eParsesTo` 
+            Binop EqEq 
+                  (Binop Plus (Const $ Num 1) (Const $ Num 1))
+                  (Const $ Num 2)
+        "0, 1 == 2" `eParsesTo`
+            Binop Pair 
+                  (Const $ Num 0) 
+                  (Binop EqEq (Const $ Num 1) (Const $ Num 2))
+
+
     it "parses variables with underscore" $ do
         "under_score" `eParsesTo` Var "under_score"
         "_x" `eParsesTo` Var "_x"

@@ -71,6 +71,12 @@ tupleValues v1 v2 = Tuple (v1, v2)
 magicValues :: Value -> Value
 magicValues v = error "No magic allowed, sorry"
 
+eqValues :: Value -> Value -> Value 
+eqValues v1 v2 = Boolean $ v1 == v2
+
+neqValues :: Value -> Value -> Value 
+neqValues v1 v2 = Boolean $ v1 /= v2
+
 embed1 :: (Value -> Value) -> Value 
 embed1 f = Callable $ Builtin (return . f)
 
@@ -134,11 +140,13 @@ printValue v = do
 initEnv :: Env
 initEnv = Map.fromList
     [ ("print", Callable $ Builtin printValue)
-    , ("(+)",   embed addValues)
-    , ("(-)",   embed subValues)
-    , ("(*)",   embed multValues)
-    , ("(/)",   embed divValues)
-    , ("(,)",   embed tupleValues)
+    , ("(+)",    embed addValues)
+    , ("(-)",    embed subValues)
+    , ("(*)",    embed multValues)
+    , ("(/)",    embed divValues)
+    , ("(,)",    embed tupleValues)
+    , ("(==)",   embed eqValues)
+    , ("(!=)",   embed neqValues)
     , ("magic", embed1 magicValues)
     ]
 

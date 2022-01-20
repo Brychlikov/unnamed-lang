@@ -51,6 +51,10 @@ startingEnv = TypeEnv $ Map.fromList
     , ("(-)", TArr TNum (TArr TNum TNum))
     , ("(*)", TArr TNum (TArr TNum TNum))
     , ("(/)", TArr TNum (TArr TNum TNum))
+    , ("(==)", TScheme (Forall [TV "a"] 
+                               (TArr (TVar $ TV "a") (TArr (TVar $ TV "a") TBool))))
+    , ("(!=)", TScheme (Forall [TV "a"] 
+                               (TArr (TVar $ TV "a") (TArr (TVar $ TV "a") TBool))))
     , ("(,)", TScheme (Forall [TV "a", TV "b"] 
                               (TArr (TVar $ TV "a") 
                                     (TArr (TVar $ TV "b") 

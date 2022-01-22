@@ -254,11 +254,12 @@ inferSB = inner . unwrap . coerceAnnotation where
         tt ~~ tf 
         return $ tt :< Cond trcond trtrue trfalse
 
-    inner (LFix e) = do 
-        trlam@(ltype :< _) <- inner $ unwrap e
+    inner (LFix name e) = do 
         tres <- fresh 
-        ltype ~~ TArr (TArr tres tres) tres
-        return $ tres :< LFix trlam
+        trlam@(ltype :< _) <- inExtended (name, tres) (inner $ unwrap e)
+        -- ltype ~~ TArr (TArr tres tres) tres
+        ltype ~~ tres
+        return $ tres :< LFix name trlam
 
 
 

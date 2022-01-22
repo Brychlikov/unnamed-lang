@@ -26,6 +26,11 @@ spec = do
             run "(fun x y z -> x * y * z) 2 3 4" `shouldReturn` Number 24
         it "supports first-class functions" $ do 
             run "let call_inc f x = f (x+1) in call_inc (fun x -> x) 1" `shouldReturn` Number 2
+
+        it "supports recursive functions" $ do 
+            run "let sum n = if n == 0 then 0 else n + sum (n-1) in sum 5" `shouldReturn` Number 15
+            run "let fib n = if n == 0 then 0 else  (if n == 1 then 1 else fib (n-1) + fib (n-2)) in fib 10"
+                `shouldReturn` Number 55
     describe "Conditionals" $ do 
         it "supports basic conditionals" $ 
             run "if true then 20 else 30" `shouldReturn` Number 20

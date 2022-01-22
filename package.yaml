@@ -33,6 +33,7 @@ dependencies:
 - comonad
 - deriving-compat
 - pretty-simple
+- mtl
 
 library:
   source-dirs: src

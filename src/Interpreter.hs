@@ -24,6 +24,7 @@ import Control.Monad.Trans.Except
 
 import Text.Pretty.Simple
 import Data.Function (on)
+import Control.Comonad.Cofree (Cofree((:<)))
 
 
 data Value
@@ -38,6 +39,7 @@ data Value
 data Clbl
     = Builtin (Value -> IO Value)
     | Clojure C.Pattern Env (Env2 Value)
+    | Fixpoint Text (Env2 Value)
 
 instance Eq Clbl where
     f == g = False
@@ -45,6 +47,7 @@ instance Eq Clbl where
 instance Show Clbl where
     show (Builtin _) = "<builtin>"
     show Clojure {} = "<clojure>"
+    show (Fixpoint name f) = "<fixpoint of " ++ T.unpack name ++ ">"
 
 
 addValues :: Value -> Value -> Value
@@ -71,13 +74,13 @@ tupleValues v1 v2 = Tuple (v1, v2)
 magicValues :: Value -> Value
 magicValues v = error "No magic allowed, sorry"
 
-eqValues :: Value -> Value -> Value 
+eqValues :: Value -> Value -> Value
 eqValues v1 v2 = Boolean $ v1 == v2
 
-neqValues :: Value -> Value -> Value 
+neqValues :: Value -> Value -> Value
 neqValues v1 v2 = Boolean $ v1 /= v2
 
-embed1 :: (Value -> Value) -> Value 
+embed1 :: (Value -> Value) -> Value
 embed1 f = Callable $ Builtin (return . f)
 
 embed :: (Value -> Value -> Value) -> Value
@@ -94,15 +97,16 @@ type Errortype = String
 
 type Env2 = ReaderT (Map.Map Text Value) (ExceptT Errortype IO)
 
-call :: Env2 Value -> Env2 Value -> Env2 Value 
-call = do 
+call :: Env2 Value -> Env2 Value -> Env2 Value
+call m1 m2= do
     v1 <- m1
-    v2 <- m2
     case v1 of
-        Callable (Builtin g) -> liftIO $ g v2
+        Callable (Builtin g) -> m2 >>= (liftIO . g)
         Callable (Clojure pat env body) ->
-            local (const $ Map.union (fromJust $ destructure pat v2) env) body
-        _ -> error "sadly, you called a non-callable :("
+            m2 >>= (\v2 ->local (const $ Map.union (fromJust $ destructure pat v2) env) body)
+        c@(Callable (Fixpoint name f)) ->
+            local (Map.insert name c) (call f m2)
+        _ -> lift $ throwE "sadly, you called a non-callable :("
 
 
 interpret :: A.Expr -> Env2 Value
@@ -120,25 +124,14 @@ interpret = foldFix eval where
         let addBound = Map.union (fromJust $ destructure pat v1)
         local addBound m2
 
-    eval (A.Call m1 m2) = do
-        v1 <- m1
-        v2 <- m2
-        case v1 of
-            Callable (Builtin g) -> liftIO $ g v2
-            Callable (Clojure pat env body) ->
-                local (const $ Map.union (fromJust $ destructure pat v2) env) body
-            _ -> error "called a non-callable"
+    eval (A.Call m1 m2) = call m1 m2
 
 
     eval (A.Lambda pat m) = do
         env <- ask
         return $ Callable $ Clojure pat env  m
 
-    eval (A.LFix m) = do
-        Callable (Clojure (C.PVar name) env m') <- m
-        resm where  
-        resm = resm >>= \c -> local (const $ Map.insert name c env) m'
-
+    eval (A.LFix name a) = return $ Callable $ Fixpoint name a
 
     eval (A.Cond mb mt mf) = mb >>= (\x -> if isTruthy x then mt else mf)
 
@@ -178,8 +171,7 @@ run s = do
     let e = lower $ unwrap $ runParser Parser.pExpr "typedRepl" s
     case runExcept $ typeExpr e of
         Left err -> print err >> return Unit
-        Right sub -> do
-            pPrint sub
+        Right (t :< _) -> do
             res <- runExceptT $ flip runReaderT initEnv $ interpret e
             case res of
                 Right v -> return v

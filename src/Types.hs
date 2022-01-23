@@ -32,6 +32,7 @@ data Type
     = TNum
     | TBool
     | TString
+    | TUnit
     | TVar TVar
     | TScheme Scheme
     | TArr Type Type

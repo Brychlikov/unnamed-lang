@@ -62,6 +62,13 @@ startingEnv = TypeEnv $ Map.fromList
     , ("magic", TScheme (Forall [TV "a", TV "b"] 
                               (TArr (TVar $ TV "a") 
                                     (TVar $ TV "b") )))
+    , ("print", TScheme (Forall [TV "a"] (TArr (TVar $ TV "a") TUnit)))
+    , ("fst", TScheme (Forall [TV "a", TV "b"] 
+                              (TArr (tupleApplication (TVar $ TV "a") (TVar $ TV "b") ) 
+                                    (TVar $ TV "a"))))
+    , ("snd", TScheme (Forall [TV "a", TV "b"] 
+                              (TArr (tupleApplication (TVar $ TV "a") (TVar $ TV "b") ) 
+                                    (TVar $ TV "b"))))
                                           
     ]
 
@@ -85,6 +92,7 @@ displayType (TVar (TV x)) =  x
 displayType TNum= "Num"
 displayType TBool = "Boolean"
 displayType TString = "Str"
+displayType TUnit = "Unit"
 displayType (TScheme s) = show s
 displayType (TArr t1 t2) = "(" ++ displayType t1 ++ "->" ++ displayType t2 ++ ")"
 displayType (TCon constr) = name constr ++ "[" ++ displayKind (kind constr) ++ "]"
@@ -147,6 +155,7 @@ instance Substitutable Type where
     apply _ TNum = TNum
     apply _ TBool = TBool
     apply _ TString  = TString
+    apply _ TUnit = TUnit
 
     apply s t@(TVar a) = Map.findWithDefault t a s
     apply s (TScheme sc) = TScheme $ apply s sc
@@ -157,6 +166,7 @@ instance Substitutable Type where
     ftv TNum  = Set.empty
     ftv TBool   = Set.empty
     ftv TString  = Set.empty
+    ftv TUnit  = Set.empty
 
     ftv (TVar a) = Set.singleton a
     ftv (TScheme sc) = ftv sc

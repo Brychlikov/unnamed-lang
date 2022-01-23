@@ -80,6 +80,14 @@ eqValues v1 v2 = Boolean $ v1 == v2
 neqValues :: Value -> Value -> Value
 neqValues v1 v2 = Boolean $ v1 /= v2
 
+fstValue :: Value -> Value 
+fstValue (Tuple (x, y)) = x
+fstValue _ = error "type error"
+
+sndValue :: Value -> Value 
+sndValue (Tuple (x, y)) = y
+sndValue _ = error "type error"
+
 embed1 :: (Value -> Value) -> Value
 embed1 f = Callable $ Builtin (return . f)
 
@@ -159,6 +167,8 @@ initEnv = Map.fromList
     , ("(==)",   embed eqValues)
     , ("(!=)",   embed neqValues)
     , ("magic", embed1 magicValues)
+    , ("fst",   embed1 fstValue)
+    , ("snd",   embed1 sndValue)
     ]
 
 unwrap :: Show a => Either a b -> b

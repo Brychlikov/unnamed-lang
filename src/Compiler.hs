@@ -13,6 +13,10 @@ import Text.Megaparsec (runParser, parseErrorPretty, errorBundlePretty)
 import qualified Parser
 import Ast.Lower (lower)
 import Control.Monad.Trans.Except (runExcept)
+import Prelude hiding (readFile)
+import System.IO hiding (readFile)
+import Data.Text.IO (readFile)
+import Shelly ( print_stdout, run, setStdin, shelly )
 import Data.Bifunctor (Bifunctor(bimap, first))
 
 
@@ -80,15 +84,16 @@ compile ((False, t) :< (Call e1 e2)) = do
     tell ","
     compile e2
     tell ")"
-compile (t :< (Let (PVar name) e1 e2)) =
-    -- PROBLEM: let bindings are not expressions, what now?
-    surroundBraces $ do
-        tell "let "
-        tell name
-        tell " = "
-        compile e1
-        tell ";"
-        compile e2
+compile (t :< (Let (PVar name) e1 e2)) = do 
+    tell "(function("
+    tell name
+    tell "){return "
+    compile e2 
+    tell ";})"
+    surroundParens $ compile e1
+    
+
+    
 compile (t :< LFix name e) = compile e
 compile (t :< Lambda (PVar name) e) = do
     tell "function("
@@ -111,3 +116,16 @@ compileSrc s = do
     p <- first errorBundlePretty $ runParser Parser.pExpr "src" s
     let tree = lower p
     bimap show (snd . runIdentity . runWriterT . compile . markTailCalls) $ runExcept (typeExpr tree)
+
+runJSCode :: T.Text -> IO T.Text
+runJSCode t = shelly $ print_stdout False $  do 
+    setStdin t
+    run "node" []
+
+runCompiled :: T.Text -> IO T.Text
+runCompiled s = do 
+    prelude <- readFile "std.js"
+    case compileSrc s of
+        Left err -> return $ T.pack err 
+        Right js -> runJSCode (prelude `T.append` js)
+    

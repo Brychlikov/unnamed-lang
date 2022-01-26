@@ -1,9 +1,9 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, GeneralisedNewtypeDeriving #-}
 module Interpreter where
 
 import Data.Map ((!))
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, fromMaybe)
 import qualified Ast.Normal as A
 import qualified Parser
 import qualified Ast.Common as C
@@ -12,7 +12,8 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Functor.Identity
 
-import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import qualified Control.Monad.Trans.Reader as RT (local, ask)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class
 import Data.Fix
@@ -20,113 +21,151 @@ import Text.ParserCombinators.ReadP (many1)
 import Ast.Lower (lower)
 import Types
 import Types.Infer
-import Control.Monad.Trans.Except
+import Control.Monad.Trans.Except (ExceptT)
+import qualified Control.Monad.Trans.Except as ET (throwE, runExcept, runExceptT)
 
 import Text.Pretty.Simple
 import Data.Function (on)
 import Control.Comonad.Cofree (Cofree((:<)))
+import Control.Monad (liftM)
+import Control.Monad.Trans.Writer (Writer)
+import qualified Control.Monad.Trans.Writer as WT (tell, runWriter)
+import Data.List (stripPrefix)
 
 
-data Value
+data Value m
     = Number Float
     | Str    Text
-    | Callable Clbl
+    | Callable (Clbl m)
     | Boolean Bool
     | Unit
-    | Tuple (Value, Value)
+    | Tuple (Value m , Value m)
     deriving (Eq, Show)
 
-data Clbl
-    = Builtin (Value -> IO Value)
-    | Clojure C.Pattern Env (Env2 Value)
-    | Fixpoint Text (Env2 Value)
+data Clbl m
+    = Builtin (Value m -> m (Value m))
+    | Clojure C.Pattern (Env m) (m (Value m))
+    | Fixpoint Text (m (Value m))
 
-instance Eq Clbl where
+instance Eq (Clbl m) where
     f == g = False
 
-instance Show Clbl where
+instance Show (Clbl m) where
     show (Builtin _) = "<builtin>"
     show Clojure {} = "<clojure>"
     show (Fixpoint name f) = "<fixpoint of " ++ T.unpack name ++ ">"
 
 
-addValues :: Value -> Value -> Value
+addValues :: Value m -> Value m -> Value m
 addValues (Number x) (Number y) = Number $ x + y
 addValues (Str s) (Str s') = Str $ T.append s s'
 addValues v1 v2 = error ("Can't add values: " ++ show v1 ++ " and " ++ show v2)
 
-multValues :: Value -> Value -> Value
+multValues :: Value m -> Value m -> Value m
 multValues (Number x) (Number y) = Number $ x * y
 multValues _ _ = error "type error"
 
-subValues :: Value -> Value -> Value
+subValues :: Value m -> Value m -> Value m
 subValues (Number x) (Number y) = Number $ x - y
 subValues _ _ = error "type error"
 
 
-divValues :: Value -> Value -> Value
+divValues :: Value m -> Value m -> Value m
 divValues (Number x) (Number y) = Number $ x / y
 divValues _ _ = error "type error"
 
-tupleValues :: Value -> Value -> Value
+tupleValues :: Value m -> Value m -> Value m
 tupleValues v1 v2 = Tuple (v1, v2)
 
-magicValues :: Value -> Value
+magicValues :: Value m -> Value m
 magicValues v = error "No magic allowed, sorry"
 
-eqValues :: Value -> Value -> Value
+eqValues :: Value m -> Value m -> Value m
 eqValues v1 v2 = Boolean $ v1 == v2
 
-neqValues :: Value -> Value -> Value
+neqValues :: Value m -> Value m -> Value m
 neqValues v1 v2 = Boolean $ v1 /= v2
 
-fstValue :: Value -> Value 
+fstValue :: Value m -> Value  m
 fstValue (Tuple (x, y)) = x
 fstValue _ = error "type error"
 
-sndValue :: Value -> Value 
+sndValue :: Value m -> Value m 
 sndValue (Tuple (x, y)) = y
 sndValue _ = error "type error"
 
-embed1 :: (Value -> Value) -> Value
+embed1 :: MonadInterpret m => (Value m -> Value m) -> Value m
 embed1 f = Callable $ Builtin (return . f)
 
-embed :: (Value -> Value -> Value) -> Value
+embed :: MonadInterpret m => (Value m -> Value m -> Value m) -> Value m
 embed f = Callable $ Builtin (\x -> return $ Callable $ Builtin (return . f x))
 
-negValue :: Value -> Value
+negValue :: Value m -> Value m
 negValue (Number x) = Number $ -x
 negValue _ = error "type error"
 
 
-type Env = Map.Map Text Value
+type Env m = Map.Map Text (Value m)
 type Errortype = String
 
 
-type Env2 = ReaderT (Map.Map Text Value) (ExceptT Errortype IO)
+class Monad m => MonadInterpret m where
+    local  :: (Env m -> Env m) -> m v -> m v
+    ask    :: m (Env m)
+    tell   :: Text -> m ()
+    throwE :: Errortype -> m a
 
-call :: Env2 Value -> Env2 Value -> Env2 Value
+    asks   :: (Env m -> a) -> m a
+    asks f =  liftM f ask
+
+newtype InterpretIO a = InterpretIO{ runInterpretIO :: ReaderT (Env InterpretIO) (ExceptT Errortype IO) a}
+    deriving(Functor, Applicative, Monad)
+
+instance MonadInterpret InterpretIO where 
+    local  f = InterpretIO . RT.local f . runInterpretIO
+    ask      = InterpretIO RT.ask 
+    tell   t = InterpretIO (liftIO $ putStrLn $ T.unpack t)
+    throwE e = InterpretIO (lift $ ET.throwE e)
+
+
+newtype InterpretTextBuffer a = InterpretTextBuffer { 
+    runInterpretTextBuffer :: ReaderT 
+                              (Env InterpretTextBuffer) 
+                              (ExceptT Errortype (Writer Text)) 
+                              a
+    }
+    deriving (Functor, Applicative, Monad)
+
+instance MonadInterpret InterpretTextBuffer where 
+    local  f = InterpretTextBuffer . RT.local f . runInterpretTextBuffer
+    ask      = InterpretTextBuffer RT.ask 
+    tell   t = InterpretTextBuffer (lift $ lift $ WT.tell t)
+    throwE e = InterpretTextBuffer (lift $ ET.throwE e)
+
+
+call :: MonadInterpret m => m (Value m) -> m (Value m) -> m (Value m)
 call m1 m2= do
     v1 <- m1
     case v1 of
-        Callable (Builtin g) -> m2 >>= (liftIO . g)
+        Callable (Builtin g) -> m2 >>= g
         Callable (Clojure pat env body) ->
             m2 >>= (\v2 ->local (const $ Map.union (fromJust $ destructure pat v2) env) body)
         c@(Callable (Fixpoint name f)) ->
             local (Map.insert name c) (call f m2)
-        _ -> lift $ throwE "sadly, you called a non-callable :("
+        _ -> throwE "sadly, you called a non-callable :("
 
 
-interpret :: A.Expr -> Env2 Value
+interpret :: MonadInterpret m => A.Expr -> m (Value m)
 interpret = foldFix eval where
 
-    eval :: A.ExprF (Env2 Value) -> Env2 Value
+    eval :: MonadInterpret m => A.ExprF (m (Value m)) -> m (Value m)
     eval (A.Const (C.Num x)) = return $ Number x
     eval (A.Const (C.Str s)) = return $ Str s
     eval (A.Const (C.Boolean b)) = return $ Boolean b
     eval (A.Var name)        = asks (Map.lookup name) >>= help
-        where help (Just v) = return v
-              help Nothing  = lift $ throwE $ "Unbound variable: " ++ show name
+        where help :: MonadInterpret m => Maybe (Value m) -> m (Value m)
+              help (Just v) = return v
+              help Nothing  = throwE $ "Unbound variable: " ++ show name
     eval (A.Let pat m1 m2)   = do
         v1 <- m1
         let addBound = Map.union (fromJust $ destructure pat v1)
@@ -144,19 +183,27 @@ interpret = foldFix eval where
     eval (A.Cond mb mt mf) = mb >>= (\x -> if isTruthy x then mt else mf)
 
 
-isTruthy :: Value -> Bool
+isTruthy :: Value m -> Bool
 isTruthy (Boolean b) = b
 isTruthy _ = False
 
-destructure :: C.Pattern -> Value -> Maybe Env
+destructure :: C.Pattern -> Value m -> Maybe (Env m)
 destructure (C.PVar name) v = Just $ Map.singleton name v
 
-printValue :: Value -> IO Value
+printValue :: MonadInterpret m => Value m -> m (Value m)
 printValue v = do
-    print v
+    tell $ display v
+    tell "\n"
     return Unit
+    where 
+    tryStripPrefix pre s = fromMaybe s (stripPrefix pre s)
+    display (Number x)       = T.pack . reverse . tryStripPrefix "0." . reverse $ show x
+    display (Str t)          = t
+    display Unit             = "()"
+    display (Tuple (v1, v2)) = "(" `T.append` display v1 `T.append` ", " `T.append` display v2 `T.append` ")"
+    display v = T.pack $ show v
 
-initEnv :: Env
+initEnv :: MonadInterpret m => Env m
 initEnv = Map.fromList
     [ ("print", Callable $ Builtin printValue)
     , ("(+)",    embed addValues)
@@ -175,14 +222,24 @@ unwrap :: Show a => Either a b -> b
 unwrap = either (\a -> error ("Unwrap on Left value: " ++ show a)) id
 
 
+runInterpreterCatchOut :: Text -> Text 
+runInterpreterCatchOut s = do
+    let e = lower $ unwrap $ runParser Parser.pExpr "typedRepl" s
+    case ET.runExcept $ typeExpr e of
+        Left err -> T.pack $ show err 
+        Right (t :< _) -> let
+            (res, buf) = WT.runWriter $ ET.runExceptT $ flip runReaderT initEnv $ runInterpretTextBuffer $ interpret e in
+            case res of
+                Right _ -> buf
+                Left err -> T.pack $ show err
 
-run :: Text -> IO Value
+run :: Text -> IO (Value InterpretIO)
 run s = do
     let e = lower $ unwrap $ runParser Parser.pExpr "typedRepl" s
-    case runExcept $ typeExpr e of
+    case ET.runExcept $ typeExpr e of
         Left err -> print err >> return Unit
         Right (t :< _) -> do
-            res <- runExceptT $ flip runReaderT initEnv $ interpret e
+            res <- ET.runExceptT $ flip runReaderT initEnv $ runInterpretIO $ interpret e
             case res of
                 Right v -> return v
                 Left err -> putStrLn err >> return Unit

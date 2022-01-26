@@ -53,6 +53,7 @@ library
     , mtl
     , parser-combinators >=1.3.0
     , pretty-simple
+    , shelly
     , text
     , transformers
   default-language: Haskell2010
@@ -78,6 +79,7 @@ executable lang-exe
     , mtl
     , parser-combinators >=1.3.0
     , pretty-simple
+    , shelly
     , text
     , transformers
   default-language: Haskell2010
@@ -107,6 +109,7 @@ test-suite lang-test
     , mtl
     , parser-combinators >=1.3.0
     , pretty-simple
+    , shelly
     , text
     , transformers
   default-language: Haskell2010
@@ -135,6 +138,7 @@ test-suite spec
     , mtl
     , parser-combinators >=1.3.0
     , pretty-simple
+    , shelly
     , text
     , transformers
   default-language: Haskell2010

@@ -14,7 +14,7 @@ data Op
 
 data Lit
     = Str Text
-    | Num Float
+    | Num Double
     | Boolean Bool
     deriving (Eq, Show)
 

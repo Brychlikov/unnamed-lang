@@ -32,7 +32,7 @@ lexeme = L.lexeme sc
 symbol :: Text -> Parser Text
 symbol = L.symbol sc
 
-number :: Parser Float
+number :: Parser Double
 number = choice [ try $ lexeme L.float
                 , try $ lexeme L.decimal ]
 

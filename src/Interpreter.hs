@@ -31,10 +31,11 @@ import Control.Monad (liftM)
 import Control.Monad.Trans.Writer (Writer)
 import qualified Control.Monad.Trans.Writer as WT (tell, runWriter)
 import Data.List (stripPrefix)
+import Text.Printf
 
 
 data Value m
-    = Number Float
+    = Number Double
     | Str    Text
     | Callable (Clbl m)
     | Boolean Bool
@@ -197,7 +198,7 @@ printValue v = do
     return Unit
     where 
     tryStripPrefix pre s = fromMaybe s (stripPrefix pre s)
-    display (Number x)       = T.pack . reverse . tryStripPrefix "0." . reverse $ show x
+    display (Number x)       = T.pack . reverse . tryStripPrefix "0." . reverse $ printf "%f" x
     display (Str t)          = t
     display (Boolean True)   = "true"
     display (Boolean False)  = "false"

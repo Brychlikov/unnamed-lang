@@ -2,6 +2,7 @@
 module Parser where
 
 import Data.Text (Text, append, cons, pack, unpack)
+import qualified Data.Text as T (concat)
 import Data.Functor( ($>), (<$) )
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -64,6 +65,19 @@ pIdentifier = do
                         <*> (pack <$> many (char '\''))
                         <?> "variable"
                         )
+
+pIdentWithFirst  :: Parser Text -> Parser Text
+pIdentWithFirst p = do 
+    res <- try inner 
+    if Set.member res keywords 
+      then fail $ "no keyword " ++ unpack res ++ " not allowed here"
+    else return res
+    where 
+      inner = lexeme $ do 
+        s1 <- p
+        s2 <- pack <$> many (alphaNumChar  <|> char '_')
+        s3 <- pack <$> many (char '\'')
+        return $ T.concat [s1, s2, s3]
 
 
 pVariable :: Parser Expr

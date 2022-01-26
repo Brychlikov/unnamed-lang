@@ -43,6 +43,9 @@ spec = describe "Expression parser" $ do
         "let x = 20 in x" `eParsesTo`
         Let (Simple (PVar "x") (Const $ Num 20)) (Var "x")
 
+    it "rejects let binders starting with capital letter" $
+        parse pExpr "" `shouldFailOn` "let Bad = 20 in Bad"
+
     it "parses left-nested let expressions" $
         "let x = let y = 10 in y in x" `eParsesTo`
         Let (Simple (PVar "x") (Let (Simple (PVar "y") (Const $ Num 10)) (Var "y")))

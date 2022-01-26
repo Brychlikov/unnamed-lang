@@ -40,7 +40,7 @@ data Value m
     | Callable (Clbl m)
     | Boolean Bool
     | Unit
-    | Tuple (Value m , Value m)
+    | Constructee Text [Value m]
     deriving (Eq, Show)
 
 data Clbl m
@@ -76,7 +76,7 @@ divValues (Number x) (Number y) = Number $ x / y
 divValues _ _ = error "type error"
 
 tupleValues :: Value m -> Value m -> Value m
-tupleValues v1 v2 = Tuple (v1, v2)
+tupleValues v1 v2 = Constructee "(,)" [v1, v2]
 
 magicValues :: Value m -> Value m
 magicValues v = error "No magic allowed, sorry"
@@ -88,11 +88,11 @@ neqValues :: Value m -> Value m -> Value m
 neqValues v1 v2 = Boolean $ v1 /= v2
 
 fstValue :: Value m -> Value  m
-fstValue (Tuple (x, y)) = x
+fstValue (Constructee "(,)" vs) = head vs
 fstValue _ = error "type error"
 
 sndValue :: Value m -> Value m 
-sndValue (Tuple (x, y)) = y
+sndValue (Constructee "(,)" vs) = head $ tail vs
 sndValue _ = error "type error"
 
 embed1 :: MonadInterpret m => (Value m -> Value m) -> Value m
@@ -203,7 +203,7 @@ printValue v = do
     display (Boolean True)   = "true"
     display (Boolean False)  = "false"
     display Unit             = "()"
-    display (Tuple (v1, v2)) = "(" `T.append` display v1 `T.append` ", " `T.append` display v2 `T.append` ")"
+    display (Constructee "(,)" [v1, v2]) = "(" `T.append` display v1 `T.append` ", " `T.append` display v2 `T.append` ")"
     display v = T.pack $ show v
 
 initEnv :: MonadInterpret m => Env m

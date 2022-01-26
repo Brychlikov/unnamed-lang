@@ -24,4 +24,8 @@ spec = do
     it "supports tail recursion" $ do
         implementationsAgreeOn 
             "let cnt acc n = if n == 0 then acc else cnt (acc + 1) (n-1) in print (cnt 0 100000)"
+    it "supports pairs" $ do 
+        implementationsAgreeOn "let p = (10, false) in print(snd p)"
+    it "works with large numbers" $ do 
+        implementationsAgreeOn "print (100000 * 20398)"
     

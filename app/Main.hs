@@ -5,7 +5,6 @@ import Compiler
 import System.Environment (getArgs)
 import qualified Data.Text as T
 import System.IO
-import Shelly
 import Data.Text (Text)
 import Control.Monad (void)
 

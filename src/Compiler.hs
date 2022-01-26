@@ -85,12 +85,19 @@ compile ((False, t) :< (Call e1 e2)) = do
     compile e2
     tell ")"
 compile (t :< (Let (PVar name) e1 e2)) = do 
-    tell "(function("
-    tell name
-    tell "){return "
+    tell "(function(){let "
+    tell name 
+    tell "="
+    compile e1 
+    tell "; return "
     compile e2 
-    tell ";})"
-    surroundParens $ compile e1
+    tell ";})()"
+    -- tell "(function("
+    -- tell name
+    -- tell "){return "
+    -- compile e2 
+    -- tell ";})"
+    -- surroundParens $ compile e1
     
 
     

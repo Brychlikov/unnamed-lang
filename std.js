@@ -38,6 +38,15 @@ function pair(x) {
         return [x, y];
     }
 }
+
+function fst (p) {
+    return p[0];
+}
+
+function snd (p) {
+    return p[1];
+}
+
 function jump(func, ...args) {
     return { yip: "yip", func, args };
 }

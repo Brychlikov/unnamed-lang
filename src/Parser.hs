@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Parser where
 
-import Data.Text (Text, append, cons, pack, unpack)
+import Data.Text (Text, append, cons, pack, unpack, singleton)
+import qualified Data.Text as T (concat)
 import Data.Functor( ($>), (<$) )
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -18,7 +19,7 @@ import Ast.Common
 type Parser = Parsec Void Text
 
 keywords :: Set.Set Text
-keywords = Set.fromList ["let", "in", "fun", "if", "then", "else"]
+keywords = Set.fromList ["let", "in", "fun", "if", "then", "else", "data"]
 
 reserved :: Set.Set Text 
 reserved = Set.fromList ["true", "false"]
@@ -65,6 +66,25 @@ pIdentifier = do
                         <?> "variable"
                         )
 
+pIdentWithFirst  :: Parser Text -> Parser Text
+pIdentWithFirst p = do 
+    res <- try inner 
+    if Set.member res keywords 
+      then fail $ "no keyword " ++ unpack res ++ " not allowed here"
+    else return res
+    where 
+      inner = lexeme $ do 
+        s1 <- p
+        s2 <- pack <$> many (alphaNumChar  <|> char '_')
+        s3 <- pack <$> many (char '\'')
+        return $ T.concat [s1, s2, s3]
+
+
+pVarIdent :: Parser Text 
+pVarIdent = pIdentWithFirst (singleton <$> (lowerChar <|> char '_'))
+
+pTypeIdent :: Parser Text 
+pTypeIdent  = pIdentWithFirst (singleton <$> upperChar)
 
 pVariable :: Parser Expr
 pVariable = Var <$> pIdentifier
@@ -113,14 +133,16 @@ pOpExpr = makeExprParser pTerm operatorTable where
 binary :: Text -> (Expr -> Expr -> Expr) -> Operator Parser Expr
 binary name f = InfixL (f <$ symbol name)
 
+prefix :: Text -> (Expr -> Expr) -> Operator Parser Expr
+prefix name f = Prefix (f <$ symbol name)
 
 pPattern :: Parser Pattern 
-pPattern = PVar <$> pIdentifier
+pPattern = PVar <$> pVarIdent
 
 pLetBinding :: Parser LetBinding 
 pLetBinding = choice 
   [ try $  Simple <$> pPattern <*> (symbol "=" *> pExpr)
-  , try $ FunBinding <$> pIdentifier <*> many pPattern <*> (symbol "=" *> pExpr)]
+  , try $ FunBinding <$> pVarIdent <*> many pPattern <*> (symbol "=" *> pExpr)]
 
 
 
@@ -144,8 +166,41 @@ pExpr :: Parser Expr
 pExpr = pOpExpr
 
 
-prefix :: Text -> (Expr -> Expr) -> Operator Parser Expr
-prefix name f = Prefix (f <$ symbol name)
+typeAtom :: Parser Type
+typeAtom = choice 
+  [ parens pType
+  , Con <$> pTypeIdent
+  , TVar <$> pVarIdent
+  ]
+
+pType :: Parser Type
+pType = makeExprParser typeAtom operatorTable where
+    operatorTable = 
+      [ [ InfixL (App <$ space) 
+        , InfixR (arrow <$ symbol "->")
+        ]
+      ]
+    arrow t1 t2 = App (App (Con "(->)") t1) t2
+    space = sc *> notFollowedBy (choice . map symbol $ Set.toList keywords)
+
+pConDecl :: Parser ConDecl 
+pConDecl = ConDecl <$> pTypeIdent <*> many typeAtom
+
+pDataDecl :: Parser DataDecl 
+pDataDecl = do 
+  symbol "data"
+  name <- pTypeIdent 
+  typeVars <- many pVarIdent
+  symbol "="
+  first <- pConDecl 
+  rest <- many (symbol "|" *> pConDecl)
+  return $ DataDecl name typeVars (first : rest)
+
+pDecl :: Parser Decl 
+pDecl = choice 
+  [ DDecl <$> pDataDecl
+  , LDecl <$> (symbol "let" *> pLetBinding)
+  ]
 
 unwrap :: Show a => Either a b -> b 
 unwrap (Left a) = error $ "unwrap called on left: " ++ show a

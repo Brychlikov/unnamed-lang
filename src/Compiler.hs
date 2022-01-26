@@ -7,7 +7,7 @@ import Control.Monad.Trans.Writer
 import Control.Comonad.Identity (Identity, runIdentity)
 import qualified Data.Text as T
 import Control.Comonad.Cofree (Cofree((:<)), ComonadCofree (unwrap))
-import Ast.Common
+import Ast.Common hiding (Type)
 import qualified Data.Map as Map
 import Text.Megaparsec (runParser, parseErrorPretty, errorBundlePretty)
 import qualified Parser

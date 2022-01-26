@@ -21,3 +21,10 @@ data Lit
 data Pattern 
     = PVar Text 
     deriving (Eq, Show)
+
+data Type 
+    = Con Text 
+    | TVar Text
+    | App Type Type
+    deriving (Eq, Show)
+

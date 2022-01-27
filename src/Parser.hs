@@ -71,7 +71,8 @@ pIdentWithFirst p = do
     res <- try inner 
     if Set.member res keywords 
       then fail $ "no keyword " ++ unpack res ++ " not allowed here"
-    else return res
+    else 
+      return res
     where 
       inner = lexeme $ do 
         s1 <- p
@@ -184,7 +185,7 @@ pType = makeExprParser typeAtom operatorTable where
     space = sc *> notFollowedBy (choice . map symbol $ Set.toList keywords)
 
 pConDecl :: Parser ConDecl 
-pConDecl = ConDecl <$> pTypeIdent <*> many typeAtom
+pConDecl = ConDecl <$> pTypeIdent <*> many (try typeAtom)
 
 pDataDecl :: Parser DataDecl 
 pDataDecl = do 
@@ -201,6 +202,9 @@ pDecl = choice
   [ DDecl <$> pDataDecl
   , LDecl <$> (symbol "let" *> pLetBinding)
   ]
+
+pProg :: Parser Prog 
+pProg = Prog <$> many pDecl 
 
 unwrap :: Show a => Either a b -> b 
 unwrap (Left a) = error $ "unwrap called on left: " ++ show a

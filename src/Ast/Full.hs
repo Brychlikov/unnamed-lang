@@ -32,4 +32,5 @@ data Decl
     | DDecl  DataDecl
     deriving (Eq, Show)
 
-data Prog = Prog [Decl] Expr
+newtype Prog = Prog [Decl] 
+    deriving (Eq, Show)

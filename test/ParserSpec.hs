@@ -8,6 +8,7 @@ import Data.Text ( Text )
 import Parser
 import Ast.Full
 import Ast.Common
+import Types.Infer (displayConstraints)
 
 eParsesTo :: Text -> Expr -> Expectation
 eParsesTo s ast = parse pExpr "" s `shouldParse` ast
@@ -17,6 +18,9 @@ tParsesTo s t = parse pType "" s `shouldParse` t
 
 dParsesTo :: Text -> Decl  -> Expectation
 dParsesTo s d = parse pDecl "" s `shouldParse` d
+
+pParsesTo :: Text -> Prog  -> Expectation
+pParsesTo s p = parse pProg "" s `shouldParse` p
 
 spec :: Spec
 spec = do
@@ -132,4 +136,20 @@ spec = do
             "let x = 10" `dParsesTo` LDecl (Simple (PVar "x") (Const $ Num 10))
             "let f x y = x y" `dParsesTo` 
                 LDecl (FunBinding "f" [PVar "x", PVar "y"] (Call (Var "x") (Var "y")))
+    describe "Program parser" $ do 
+        it "parses a simple program" $ do 
+            "data Tree a \n\ 
+            \= Node (Tree a) a (Tree a)\n\ 
+            \| Leaf \n\ 
+            \let _ = print Empty"
+                `pParsesTo` Prog 
+                    [ DDecl (DataDecl "Tree" ["a"] 
+                            [ ConDecl "Node" [ App (Con "Tree") (TVar "a")
+                                             , TVar "a"
+                                             , App (Con "Tree") (TVar "a")
+                                             ]
+                            , ConDecl "Leaf" [] 
+                            ])
+                    , LDecl (Simple (PVar "_") (Call (Var "print") (Var "Empty")))
+                    ]
 

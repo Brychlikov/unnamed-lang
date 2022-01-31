@@ -210,5 +210,14 @@ unwrap :: Show a => Either a b -> b
 unwrap (Left a) = error $ "unwrap called on left: " ++ show a
 unwrap (Right b) = b
 
+unwrapParseError :: (VisualStream s, TraversableStream s, ShowErrorComponent e) => 
+                     Either (ParseErrorBundle s e) a  ->
+                     a
+unwrapParseError (Right a) = a 
+unwrapParseError (Left err) = error $ errorBundlePretty err
+
 fullParse :: Text -> Expr 
 fullParse = unwrap . runParser pExpr ""
+
+parseProgUnwrap :: Text -> Prog
+parseProgUnwrap = unwrapParseError . runParser pProg ""

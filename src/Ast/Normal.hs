@@ -22,11 +22,14 @@ $(deriveShow1 ''ExprF)
 
 data LetBindingF a
     = Simple Pattern a
-    | FunBinding Text Pattern a 
     deriving (Eq, Show, Functor, Foldable)
+-- | FunBinding Text Pattern a 
 
 type Expr = Fix ExprF
 type AnnotatedExpr a = Cofree ExprF a
+
+data Prog = Prog [DataDecl] [LetBindingF Expr]
+data AnnotatedProg a = AnnotatedProg [DataDecl] [LetBindingF (AnnotatedExpr a)]
 
 coerceAnnotation :: Expr -> AnnotatedExpr () 
 coerceAnnotation = foldFix ann where 

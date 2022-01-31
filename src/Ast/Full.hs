@@ -21,11 +21,6 @@ data LetBinding
     | FunBinding Text [Pattern] Expr
     deriving (Eq, Show)
 
-data DataDecl = DataDecl Text [Text] [ConDecl]
-    deriving(Eq, Show)
-
-data ConDecl = ConDecl Text [Type]
-    deriving(Eq, Show)
 
 data Decl
     = LDecl LetBinding 

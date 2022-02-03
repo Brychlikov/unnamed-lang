@@ -20,6 +20,8 @@ data Lit
 
 data Pattern 
     = PVar Text 
+    | PNull 
+    | PCon Text [Text]
     deriving (Eq, Show)
 
 data Type 

@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Types.Infer where
 
 import qualified Data.Map as Map
@@ -26,6 +27,9 @@ import Data.Text.Lazy (toStrict)
 import Control.Applicative (Const)
 import Data.Foldable (foldrM)
 import Data.Maybe (fromMaybe, fromJust)
+import Data.Bifunctor (second)
+import GHC.Base (thenIO)
+import Data.List (find)
 
 type Var = Text
 
@@ -52,13 +56,13 @@ tupleApplication t1 = TApp (TApp (TCon tup) t1)
 applyConstructor  :: Constructor -> [Type] -> Type
 applyConstructor = foldl TApp . TCon
 
-evalConDeclaration :: [Constructor] -> C.ConDecl -> Either TypeError ConDecl 
+evalConDeclaration :: [Constructor] -> C.ConDecl -> Either TypeError ConDecl
 evalConDeclaration cs (C.ConDecl cname ctypes) = do
     types <- mapM (evalType cs) ctypes
     return $ ConDecl cname types
 
 
-evalDataDeclaration :: [Constructor] -> C.DataDecl -> Either TypeError DataDecl 
+evalDataDeclaration :: [Constructor] -> C.DataDecl -> Either TypeError DataDecl
 evalDataDeclaration cs (C.DataDecl name varnames consts) = do
     let dKind   = foldr (\el acc -> KType `KArr` acc) KType varnames
         newCon  = Constructor {name = name, kind = dKind}
@@ -71,26 +75,27 @@ makeFunc :: [Type] -> Type -> Type
 makeFunc ts restype = generalize' emptyEnv $ foldr tArr restype ts
 
 conType :: DataDecl -> ConDecl -> Type
-conType (DataDecl con tp _ ) (ConDecl cname ts) = 
-    makeFunc ts tp
+conType (DataDecl con tp _ ) (ConDecl cname ts) =
+    traceMsgWith show ("making constructor for " ++ unpack cname) $ makeFunc ts tp
+    -- makeFunc ts tp
 
-conPred :: DataDecl -> ConDecl -> Type 
-conPred (DataDecl con tp _) (ConDecl cname ts) =  
+conPred :: DataDecl -> ConDecl -> Type
+conPred (DataDecl con tp _) (ConDecl cname ts) =
     makeFunc [tp] tBoolean
 
-conGetters :: DataDecl -> ConDecl -> [(Text, Type)] 
-conGetters (DataDecl con tp constrs) (ConDecl cname ts) = 
+conGetters :: DataDecl -> ConDecl -> [(Text, Type)]
+conGetters (DataDecl con tp constrs) (ConDecl cname ts) =
     [
         ("get" `T.append` cname `T.append` T.pack (show n), makeFunc [tp] t)
     |   (n, t) <- zip [0..] ts
     ]
-    
 
-    
-addDataDeclaration' :: DataDecl -> TypeEnv -> TypeEnv 
-addDataDeclaration' dd@(DataDecl con tp constrs) (TypeEnv (env, cs)) = TypeEnv (env''', cs') where 
+
+
+addDataDeclaration' :: DataDecl -> TypeEnv -> TypeEnv
+addDataDeclaration' dd@(DataDecl con tp constrs) (TypeEnv (env, cs)) = TypeEnv (env''', cs') where
     cs' = con : cs
-    env' = foldl (\e (ConDecl name ts) -> Map.insert name (makeFunc ts tp) e) env constrs
+    env' = foldl (\e cd@(ConDecl name ts) -> Map.insert name (conType dd cd) e) env constrs
     env'' = foldl (\e cd@(ConDecl name ts) -> Map.insert ("is" `T.append` name) (conPred dd cd) e) env' constrs
     env''' = foldl (\e cd@(ConDecl name ts) -> Map.fromList (conGetters dd cd) `Map.union` e) env'' constrs
 
@@ -339,6 +344,49 @@ inferSB = inner . unwrap . coerceAnnotation where
         ltype ~~ tres
         return $ tres :< LFix name trlam
 
+    inner (Switch e arms) = do
+        matchee@(subtype :< _) <- inner $ unwrap e
+        pattype <- getPatType (map fst arms)
+        subtype ~~ pattype
+        tres <- fresh
+        let armLabels = map fst arms
+        typedArms <-  mapM (inner . unwrap . snd) arms
+        let armTypes = map getType typedArms
+        mapM_ (tres~~) armTypes
+
+        return $ tres :< Switch matchee (zip armLabels typedArms)
+        where
+            getPatType :: [Text] -> Infer Type
+            getPatType labels = do
+                ts <- mapM getConType labels
+                case ts of
+                    []  -> lift $ throwE $ MiscError "Empty matches not allowed, this should be unreachable"
+                    h:t -> if all (typeEquality h) ts then return h
+                        else let offender = find (not . typeEquality h) ts in
+                            lift $ throwE $ MiscError $
+                                "Con mismatch on " `T.append` (T.pack $ show labels) `T.append` ": " `T.append` T.pack (show h) `T.append` " vs " `T.append` (T.pack $ show $ fromJust offender)
+
+
+            getConType :: Text -> Infer Type
+            getConType cname = do
+                res <- asks (Map.lookup cname . fst . unTypeEnv)
+                case res of
+                    Just t -> return $ (traceShowId $ getRetType t)
+                    Nothing -> lift $ throwE $ MiscError "aaaaaaaaaa"
+
+            getRetType (TApp (TApp (TCon c) t2) t) | c == cArrow = getRetType t
+            -- getRetType (TScheme (Forall vars t)) = TScheme (Forall vars (getRetType t))
+            getRetType (TScheme (Forall vars t)) = getRetType t
+            getRetType t = t
+
+            typeEquality :: Type -> Type -> Bool
+            typeEquality t1 t2 = case runExcept $ runSolver [(t1, t2)] of 
+                Left _ -> False
+                Right _ -> True
+
+            getType (t :< _) = t
+    inner _ = undefined
+
 
 
 
@@ -385,24 +433,30 @@ tryTE (Left err) = lift $ throwE err
 inferProg :: Prog -> Infer ([DataDecl], [LetBindingF TypedExpr])
 inferProg (Prog datas lets) = do
 
-    (constrs, datadecls) <- tryTE $ foldrM (\d (cs, res) -> do 
+    (constrs, datadecls) <- tryTE $ foldrM (\d (cs, res) -> do
             dd@(DataDecl c tp cds) <- evalDataDeclaration cs d
             return (c:cs, dd:res) ) ([], []) datas
-    
+
     let TypeEnv (beginEnv, cons) = foldr addDataDeclaration' startingEnv datadecls
 
-    beginEnv' <- foldrM (\(Simple (PVar name) _ ) acc -> do
+    beginEnv' <- foldrM (\(Simple pat _ ) acc -> do
         tv <- fresh
-        return $ Map.insert name tv acc
+        case pat of
+            C.PNull -> return acc
+            C.PVar name -> return $ Map.insert name tv acc
+            C.PCon _ _ -> error "TODO"
         )
         beginEnv
         lets
 
-    typedLets <-mapM (\(Simple (PVar name) te) -> do
-             tv <- local (const $ TypeEnv (beginEnv', cons)) $ asks (fromJust . Map.lookup name . fst . unTypeEnv)
+    typedLets <-mapM (\(Simple pat te) -> do
+             tv <- case pat of
+                 C.PVar name -> local (const $ TypeEnv (beginEnv', cons)) $ asks (fromJust . Map.lookup name . fst . unTypeEnv)
+                 C.PNull -> fresh
+                 C.PCon _ _ -> error "TODO"
              tres :< resTree <- local (const $ TypeEnv (beginEnv', cons)) $ inferSB te
              tv ~~ tres
-             return $ Simple (PVar name) (tres :< resTree)
+             return $ Simple pat (tres :< resTree)
              )
            lets
     return (datadecls, typedLets)

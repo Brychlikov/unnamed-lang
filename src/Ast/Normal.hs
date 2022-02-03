@@ -6,8 +6,9 @@ import Data.Text(Text)
 import Ast.Common
 import Data.Fix
 import Control.Comonad.Cofree
-import Data.Functor.Classes (Show1)
+import Data.Functor.Classes (Show1, Eq1)
 import Text.Show.Deriving
+import Data.Eq.Deriving
 
 data ExprF a 
     = Const Lit 
@@ -17,8 +18,10 @@ data ExprF a
     | LFix Text a
     | Lambda Pattern a
     | Cond a a a 
+    | Switch a [(Text, a)]
     deriving (Eq, Show, Functor, Foldable)
 $(deriveShow1 ''ExprF)
+$(deriveEq1 ''ExprF)
 
 data LetBindingF a
     = Simple Pattern a
@@ -57,3 +60,7 @@ econd e1 e2 e3 = Fix $ Cond e1 e2 e3
 
 elfix :: Text -> Expr -> Expr 
 elfix t e = Fix $ LFix t e
+
+eswitch :: Expr -> [(Text, Expr)] -> Expr 
+eswitch e arms = 
+    Fix $ Switch e arms

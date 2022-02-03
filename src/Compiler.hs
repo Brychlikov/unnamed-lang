@@ -17,7 +17,7 @@ import Prelude hiding (readFile)
 import System.IO hiding (readFile)
 import Data.Text.IO (readFile)
 import Shelly ( print_stdout, run, setStdin, shelly )
-import Data.Bifunctor (Bifunctor(bimap, first))
+import Data.Bifunctor (Bifunctor(bimap, first, second))
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty ( NonEmpty((:|)) )
 import Debug.Trace (traceShowId)
@@ -48,6 +48,7 @@ markTailCalls = aux NonTail where
     aux tail (t :< (LFix n e)) = (tail, t) :< LFix n (aux NonTail e)
     aux tail (t :< (Lambda pat e)) = (tail, t) :< Lambda pat (aux Tail e)
     aux tail (t :< (Cond ec et ef)) = (tail, t) :< Cond (aux NonTail ec) (aux tail et) (aux tail ef)
+    aux tail (t :< (Switch e arms)) = (tail, t) :< Switch (aux NonTail e) (map (second (aux tail)) arms)
 
 type Comp = WriterT T.Text Identity
 
@@ -87,6 +88,9 @@ surroundBraces = surround "{" "}"
 
 surroundBrackets :: Comp a -> Comp a
 surroundBrackets = surround "[" "]"
+
+surroundQuotes :: Comp a -> Comp a 
+surroundQuotes = surround "\"" "\""
 
 
 stringLiteral :: T.Text -> Comp ()
@@ -139,6 +143,33 @@ compile (t :< Cond ec et ef) = do
     compile et
     tell " : "
     compile ef
+
+
+compile (t :< Switch e arms) = do 
+    let last = tell "(function(){throw new Error('match arms non-exhaustive');})()"
+    let eComp = compile e
+    foldr (\(name, armE) next -> 
+        emitIfStatement 
+            (emitAccessJSField "conTag" eComp >> tell "==" >> (surroundQuotes $ tell name))
+            (compile armE)
+            next) last arms
+
+compile _ = error "GIMME A BREAK"
+
+emitIfStatement :: Comp () -> Comp () -> Comp () -> Comp() 
+emitIfStatement ec et ef = do 
+    surroundParens ec 
+    tell " ? "
+    surroundParens et 
+    tell " : "
+    surroundParens ef
+    
+
+emitAccessJSField :: T.Text -> Comp () -> Comp () 
+emitAccessJSField f c = do 
+    c 
+    tell "."
+    tell f
 
 emitJSField :: T.Text -> Comp () -> Comp ()
 emitJSField field value = do
@@ -245,6 +276,10 @@ compileLetDecl (Simple (C.PVar name) e) = do
     tell name
     tell "= "
     compile e
+    tell ";"
+
+compileLetDecl (Simple (C.PNull) e) = do 
+    compile e 
     tell ";"
 
 

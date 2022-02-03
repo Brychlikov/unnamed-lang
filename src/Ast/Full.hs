@@ -13,6 +13,7 @@ data Expr
     | Let LetBinding Expr
     | Lambda [Pattern] Expr
     | Cond Expr Expr Expr
+    | Match Expr [(Pattern, Expr)]
     deriving (Eq, Show)
 
 

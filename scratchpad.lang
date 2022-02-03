@@ -1,0 +1,42 @@
+data List a 
+= Empty 
+| Cons a (List a)
+
+let l = Cons 1 (Cons 2 Empty)
+
+match l with 
+| Empty -> print "[]"
+| Cons a rest -> print a 
+end 
+
+
+
+switch l on 
+| Empty -> print "[]"
+| Cons  -> let a = getCons0 l in let b = getCons1 l in print a
+end
+
+
+
+match l with 
+| Empty -> print "[]"
+| Cons a (Cons b rest) -> print (a + b) 
+end 
+
+switch l on 
+| Empty -> print "[]"
+| Cons  -> let a = getCons0 l in let _sub = getCons1 l in 
+    match _sub with
+    | Empty -> panic 
+    | Cons (b rest) -> print (a + b)
+    end 
+end
+
+switch l on 
+| Empty -> print "[]"
+| Cons  -> let a = getCons0 l in let _sub = getCons1 l in 
+    switch _sub on
+    | Empty -> panic 
+    | Cons -> let b = getCons0 _sub in let rest = getCons1 _sub in print (a + b)
+    end 
+end

@@ -1,6 +1,6 @@
 const unit = {};
 function print(x) {
-    console.log(x);
+    console.log(JSON.stringify(x));
     return unit
 }
 function add(x) {

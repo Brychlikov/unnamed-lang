@@ -19,9 +19,9 @@ import Ast.Common
 type Parser = Parsec Void Text
 
 keywords :: Set.Set Text
-keywords = Set.fromList ["let", "in", "fun", "if", "then", "else", "data"]
+keywords = Set.fromList ["let", "in", "fun", "if", "then", "else", "data", "match", "with", "end"]
 
-reserved :: Set.Set Text 
+reserved :: Set.Set Text
 reserved = Set.fromList ["true", "false"]
 
 sc :: Parser ()
@@ -37,19 +37,19 @@ number :: Parser Double
 number = choice [ try $ lexeme L.float
                 , try $ lexeme L.decimal ]
 
-stringLiteral :: Parser Text 
+stringLiteral :: Parser Text
 stringLiteral = pack <$> (char '"' >> manyTill L.charLiteral (char '"'))
 
-pString :: Parser Expr 
+pString :: Parser Expr
 pString = Const . Str <$> stringLiteral
 
-pBoolean :: Parser Expr 
+pBoolean :: Parser Expr
 pBoolean = Const . Boolean <$> choice [True <$ symbol "true", False <$ symbol "false"]
 
 pIdentifier :: Parser Text
 pIdentifier = do
-    s <- try inner 
-    if Set.member s keywords then fail $ "keyword " ++ unpack s ++ " not allowed here" else return s 
+    s <- try inner
+    if Set.member s keywords then fail $ "keyword " ++ unpack s ++ " not allowed here" else return s
 
     where
         collect a b c = cons a $ append b c
@@ -57,7 +57,7 @@ pIdentifier = do
         legalChars :: Parser Char
         legalChars = alphaNumChar <|> char '_'
 
-        legalStart :: Parser Char 
+        legalStart :: Parser Char
         legalStart = letterChar <|> char '_'
         inner = lexeme  (   collect
                         <$> legalStart
@@ -67,24 +67,24 @@ pIdentifier = do
                         )
 
 pIdentWithFirst  :: Parser Text -> Parser Text
-pIdentWithFirst p = do 
-    res <- try inner 
-    if Set.member res keywords 
+pIdentWithFirst p = do
+    res <- try inner
+    if Set.member res keywords
       then fail $ "no keyword " ++ unpack res ++ " not allowed here"
-    else 
+    else
       return res
-    where 
-      inner = lexeme $ do 
+    where
+      inner = lexeme $ do
         s1 <- p
         s2 <- pack <$> many (alphaNumChar  <|> char '_')
         s3 <- pack <$> many (char '\'')
         return $ T.concat [s1, s2, s3]
 
 
-pVarIdent :: Parser Text 
+pVarIdent :: Parser Text
 pVarIdent = pIdentWithFirst (singleton <$> (lowerChar <|> char '_'))
 
-pTypeIdent :: Parser Text 
+pTypeIdent :: Parser Text
 pTypeIdent  = pIdentWithFirst (singleton <$> upperChar)
 
 pVariable :: Parser Expr
@@ -101,6 +101,7 @@ pTerm :: Parser Expr
 pTerm = choice
     [ parens pExpr
     , pLetExpr
+    , pMatchExpr
     , pIfExpr
     , pBoolean
     , pLambda
@@ -137,30 +138,54 @@ binary name f = InfixL (f <$ symbol name)
 prefix :: Text -> (Expr -> Expr) -> Operator Parser Expr
 prefix name f = Prefix (f <$ symbol name)
 
-pPattern :: Parser Pattern 
-pPattern = PVar <$> pVarIdent
+pVarPat :: Parser Pattern
+pVarPat = PVar <$> pVarIdent
 
-pLetBinding :: Parser LetBinding 
-pLetBinding = choice 
+pNullPat :: Parser Pattern
+pNullPat = PNull <$ symbol "_"
+
+pConPat :: Parser Pattern 
+pConPat = PCon <$> pTypeIdent <*> many pVarIdent
+
+pPattern :: Parser Pattern
+pPattern = choice 
+  [ try pConPat
+  , pNullPat 
+  , pVarPat
+  , symbol "(" *> pPattern <* symbol ")"
+  ]
+
+pMatchExpr :: Parser Expr 
+pMatchExpr = do 
+  symbol "match"
+  e <- pExpr 
+  symbol "with"
+  arms <- many ((,) <$> (symbol "|" *> pPattern) <*> (symbol "->" *> pExpr))
+  symbol "end"
+  return $ Match e arms
+
+
+pLetBinding :: Parser LetBinding
+pLetBinding = choice
   [ try $  Simple <$> pPattern <*> (symbol "=" *> pExpr)
   , try $ FunBinding <$> pVarIdent <*> many pPattern <*> (symbol "=" *> pExpr)]
 
 
 
 pLetExpr :: Parser Expr
-pLetExpr = Let 
-  <$> (symbol "let" *> pLetBinding) 
+pLetExpr = Let
+  <$> (symbol "let" *> pLetBinding)
   <*> (symbol "in"  *> pExpr)
 
-pIfExpr :: Parser Expr 
-pIfExpr = Cond 
+pIfExpr :: Parser Expr
+pIfExpr = Cond
   <$> (symbol "if" *> pExpr)
   <*> (symbol "then" *> pExpr)
   <*> (symbol "else" *> pExpr)
 
 
-pLambda :: Parser Expr 
-pLambda = Lambda 
+pLambda :: Parser Expr
+pLambda = Lambda
   <$> (symbol "fun" *> some pPattern)
   <*> (symbol "->"  *> pExpr)
 pExpr :: Parser Expr
@@ -168,7 +193,7 @@ pExpr = pOpExpr
 
 
 typeAtom :: Parser Type
-typeAtom = choice 
+typeAtom = choice
   [ parens pType
   , Con <$> pTypeIdent
   , TVar <$> pVarIdent
@@ -176,47 +201,47 @@ typeAtom = choice
 
 pType :: Parser Type
 pType = makeExprParser typeAtom operatorTable where
-    operatorTable = 
-      [ [ InfixL (App <$ space) 
+    operatorTable =
+      [ [ InfixL (App <$ space)
         , InfixR (arrow <$ symbol "->")
         ]
       ]
     arrow t1 t2 = App (App (Con "(->)") t1) t2
     space = sc *> notFollowedBy (choice . map symbol $ Set.toList keywords)
 
-pConDecl :: Parser ConDecl 
+pConDecl :: Parser ConDecl
 pConDecl = ConDecl <$> pTypeIdent <*> many (try typeAtom)
 
-pDataDecl :: Parser DataDecl 
-pDataDecl = do 
+pDataDecl :: Parser DataDecl
+pDataDecl = do
   symbol "data"
-  name <- pTypeIdent 
+  name <- pTypeIdent
   typeVars <- many pVarIdent
   symbol "="
-  first <- pConDecl 
+  first <- pConDecl
   rest <- many (symbol "|" *> pConDecl)
   return $ DataDecl name typeVars (first : rest)
 
-pDecl :: Parser Decl 
-pDecl = choice 
+pDecl :: Parser Decl
+pDecl = choice
   [ DDecl <$> pDataDecl
   , LDecl <$> (symbol "let" *> pLetBinding)
   ]
 
-pProg :: Parser Prog 
-pProg = Prog <$> many pDecl 
+pProg :: Parser Prog
+pProg = Prog <$> many pDecl
 
-unwrap :: Show a => Either a b -> b 
+unwrap :: Show a => Either a b -> b
 unwrap (Left a) = error $ "unwrap called on left: " ++ show a
 unwrap (Right b) = b
 
-unwrapParseError :: (VisualStream s, TraversableStream s, ShowErrorComponent e) => 
+unwrapParseError :: (VisualStream s, TraversableStream s, ShowErrorComponent e) =>
                      Either (ParseErrorBundle s e) a  ->
                      a
-unwrapParseError (Right a) = a 
+unwrapParseError (Right a) = a
 unwrapParseError (Left err) = error $ errorBundlePretty err
 
-fullParse :: Text -> Expr 
+fullParse :: Text -> Expr
 fullParse = unwrap . runParser pExpr ""
 
 parseProgUnwrap :: Text -> Prog

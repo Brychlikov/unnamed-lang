@@ -54,8 +54,10 @@ spec = do
             "let x = 20 in x" `eParsesTo`
             Let (Simple (PVar "x") (Const $ Num 20)) (Var "x")
 
-        it "rejects let binders starting with capital letter" $
-            parse pExpr "" `shouldFailOn` "let Bad = 20 in Bad"
+        -- With introduction of constructor pattens
+        -- this should probably  be legal (albeit not useful)
+        -- it "rejects let binders starting with capital letter" $
+        --     parse pExpr "" `shouldFailOn` "let Bad = 20 in Bad"
 
         it "parses left-nested let expressions" $
             "let x = let y = 10 in y in x" `eParsesTo`
@@ -66,6 +68,11 @@ spec = do
             "let x = 10 in let y = 20 in x + y" `eParsesTo`
             Let (Simple (PVar "x") (Const $ Num 10))
                 (Let (Simple (PVar "y") (Const $ Num 20)) (Binop Plus (Var "x") (Var "y")))
+
+        it "parses let patterns" $ do 
+            "let _ = print 10 in 10" `eParsesTo` Let (Simple PNull (Call (Var "print") (Const $ Num 10))) (Const $ Num 10)
+            "let (Cons h t) = xs in h" `eParsesTo` Let (Simple (PCon "Cons" ["h", "t"]) (Var "xs")) (Var "h")
+            "let f (Cons h t) = h in f" `eParsesTo` Let (FunBinding "f" [PCon "Cons" ["h", "t"]] (Var "h")) (Var "f")
 
         it "parses calls" $ do
             "x y" `eParsesTo` Call (Var "x") (Var "y")
@@ -136,6 +143,23 @@ spec = do
             "let x = 10" `dParsesTo` LDecl (Simple (PVar "x") (Const $ Num 10))
             "let f x y = x y" `dParsesTo` 
                 LDecl (FunBinding "f" [PVar "x", PVar "y"] (Call (Var "x") (Var "y")))
+
+        it "parses match expressions" $ do 
+            "match x with \n\ 
+            \| Empty -> 0 \n\ 
+            \| Cons h t -> 1\n\ 
+            \end" `eParsesTo` 
+                Match (Var "x")
+                      [ (PCon "Empty" [], Const $ Num 0) 
+                      , (PCon "Cons" ["h", "t"], Const $ Num 1)
+                      ]
+
+        it "parses match expressions with wildcards" $ do 
+            "match f x with \n\ 
+            \| _ -> 10\n\ 
+            \end" `eParsesTo`
+                Match (Call (Var "f") (Var "x"))
+                      [ (PNull, Const $ Num 10)]
     describe "Program parser" $ do 
         it "parses a simple program" $ do 
             "data Tree a \n\ 
@@ -150,6 +174,6 @@ spec = do
                                              ]
                             , ConDecl "Leaf" [] 
                             ])
-                    , LDecl (Simple (PVar "_") (Call (Var "print") (Var "Empty")))
+                    , LDecl (Simple PNull (Call (Var "print") (Var "Empty")))
                     ]
 

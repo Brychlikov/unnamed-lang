@@ -5,6 +5,7 @@ import Ast.Common
 import Ast.Normal
 import Data.List (partition)
 import Control.Comonad.Cofree
+import qualified Data.Text as T
 
 lower :: F.Expr -> Expr
 lower (F.Const l) = econst l
@@ -38,6 +39,19 @@ lower (F.Let (F.FunBinding name pats e1) e2) =
 lower (F.Lambda pats body) = lambdaFlatten pats (lower body)
 
 lower (F.Cond e1 e2 e3) = econd (lower e1) (lower e2) (lower e3)
+
+lower (F.Match e arms) = elet mbind (lower e) (eswitch mvar (map (lowerArm mvar) arms)) where
+    mbind = PVar "_matchVar"
+    mvar = evar "_matchVar"
+
+    lowerArm :: Expr -> (Pattern, F.Expr) -> (T.Text, Expr)
+    lowerArm mexpr (PNull, e) = ("_", lower e)
+    lowerArm mexpr (PVar vname, e) = error "only constructors allowed in match"
+    lowerArm mexpr (PCon name fields, e) =
+        (name, foldr (\(n, el) acc ->
+                elet (PVar el)
+                     (ecall (evar ("get" `T.append` name `T.append` T.pack (show n))) mexpr)
+                      acc )(lower e) (zip [0..] fields))
 
 lambdaFlatten :: [Pattern] -> Expr -> Expr
 lambdaFlatten [pat] body = elambda pat body

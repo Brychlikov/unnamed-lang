@@ -83,3 +83,11 @@ spec = do
                        \| Cons a (List a)\
                        \let test = Cons 1 (Cons 2 Empty)"
         
+    it "types a program with a match statement" $ do 
+        progShouldType "data List a \ 
+                       \= Empty \
+                       \| Cons a (List a)\
+                       \match Cons 1 Empty with \ 
+                       \| Empty -> 0 \ 
+                       \| Cons a b -> a \ 
+                       \end"

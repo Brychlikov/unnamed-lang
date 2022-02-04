@@ -6,7 +6,7 @@ import System.Environment (getArgs)
 import qualified Data.Text as T
 import Data.Text (Text)
 import Control.Monad (void)
-import Data.Text.IO
+import Data.Text.IO hiding (putStrLn)
 import Prelude hiding (readFile, writeFile)
 import Compiler (compileProgWithStd)
 
@@ -19,7 +19,7 @@ main = do
             src <- readFile infile 
             code <- compileProgWithStd src
             case code of 
-                Left err -> print $ "Compilation error: " ++ err
+                Left err -> print "Compilation error: " >> putStrLn err
                 Right res -> writeFile outfile res
 
         _ -> print "Expected exactly two arguments"

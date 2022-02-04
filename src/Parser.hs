@@ -15,11 +15,12 @@ import qualified Data.Set as Set
 
 import Ast.Full
 import Ast.Common
+import Data.Maybe (fromMaybe)
 
 type Parser = Parsec Void Text
 
 keywords :: Set.Set Text
-keywords = Set.fromList ["let", "in", "fun", "if", "then", "else", "data", "match", "with", "end"]
+keywords = Set.fromList ["let", "in", "fun", "if", "then", "else", "data", "match", "with", "end", "|"]
 
 reserved :: Set.Set Text
 reserved = Set.fromList ["true", "false"]
@@ -90,6 +91,8 @@ pTypeIdent  = pIdentWithFirst (singleton <$> upperChar)
 pVariable :: Parser Expr
 pVariable = Var <$> pIdentifier
 
+pUnit :: Parser Expr 
+pUnit = Const Unit <$ symbol "()"
 
 pNumeric :: Parser Expr
 pNumeric = Const . Num <$> number
@@ -97,9 +100,30 @@ pNumeric = Const . Num <$> number
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
+brackets :: Parser a -> Parser a
+brackets = between (symbol "[") (symbol "]")
+
+nonEmptyComaList :: Parser [Expr]
+nonEmptyComaList = do
+    first <- pExpr
+    rest <- many (symbol "," *> pExpr)
+    return $ first : rest
+
+pTuple :: Parser Expr
+pTuple = foldr1 (Binop Pair) <$> parens nonEmptyComaList
+
+pList :: Parser Expr
+pList = foldr (Call . Call (Var "Cons")) (Var "Empty") <$> brackets inner where
+  inner = do
+    r <- optional nonEmptyComaList
+    return $ fromMaybe [] r
+
 pTerm :: Parser Expr
 pTerm = choice
-    [ parens pExpr
+    [ try pTuple
+    , pUnit
+    , pList
+    , parens pExpr
     , pLetExpr
     , pMatchExpr
     , pIfExpr
@@ -126,8 +150,7 @@ pOpExpr = makeExprParser pTerm operatorTable where
       , [ binary "==" (Binop EqEq)
         , binary "!=" (Binop Neq)
         ]
-      , [ InfixR (Binop Pair <$ symbol ",")
-        ]
+      , [ InfixR (Binop Seq  <$ symbol ";") ]
       ]
     appl = InfixL (Call <$ space)
     space = sc *> notFollowedBy (choice . map symbol $ Set.toList keywords)
@@ -144,21 +167,21 @@ pVarPat = PVar <$> pVarIdent
 pNullPat :: Parser Pattern
 pNullPat = PNull <$ symbol "_"
 
-pConPat :: Parser Pattern 
+pConPat :: Parser Pattern
 pConPat = PCon <$> pTypeIdent <*> many pVarIdent
 
 pPattern :: Parser Pattern
-pPattern = choice 
+pPattern = choice
   [ try pConPat
-  , pNullPat 
+  , pNullPat
   , pVarPat
   , symbol "(" *> pPattern <* symbol ")"
   ]
 
-pMatchExpr :: Parser Expr 
-pMatchExpr = do 
+pMatchExpr :: Parser Expr
+pMatchExpr = do
   symbol "match"
-  e <- pExpr 
+  e <- pExpr
   symbol "with"
   arms <- many ((,) <$> (symbol "|" *> pPattern) <*> (symbol "->" *> pExpr))
   symbol "end"

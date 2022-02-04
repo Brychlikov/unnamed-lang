@@ -1,8 +1,24 @@
 const unit = {};
-function print(x) {
-    console.log(JSON.stringify(x));
+function println(x) {
+    if(typeof x == "string") {
+        console.log(x);
+    }
+    else {
+        console.log(JSON.stringify(x));
+    }
     return unit
 }
+
+function print(x) {
+    if(typeof x == "string") {
+        process.stdout.write(x);
+    }
+    else {
+        process.stdout.write(JSON.stringify(x));
+    }
+    return unit;
+}
+
 function add(x) {
     return function (y) {
         return x + y;
@@ -23,14 +39,33 @@ function div(x) {
         return x / y;
     }
 }
+function deepEq(x, y) {
+    if(typeof x == 'function' || typeof y == 'function'){
+        return false;
+    }
+    if(typeof x == 'object' && typeof y == 'object') {
+        let xProps = Object.getOwnPropertyNames(x);
+        let yProps = Object.getOwnPropertyNames(y);
+        if(xProps.length != yProps.length) {
+            return false;
+        }
+        for(const p of xProps) {
+            if(!deepEq(x[p], y[p])) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return x == y;
+}
 function eq(x) {
     return function (y) {
-        return x === y;
+        return deepEq(x, y);
     }
 }
 function neq(x) {
     return function (y) {
-        return x !== y;
+        return !deepEq(x, y);
     }
 }
 function pair(x) {
@@ -45,6 +80,16 @@ function fst (p) {
 
 function snd (p) {
     return p[1];
+}
+
+function seq(x) {
+    return function(y) {
+        return y;
+    }
+}
+
+function error(t) {
+    throw new Error(t);
 }
 
 function jump(func, ...args) {

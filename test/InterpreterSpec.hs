@@ -42,7 +42,7 @@ spec = do
 
     describe "Pairs" $ do
         it "supports pair construction" $ 
-            run "2, 2" `shouldReturn` Constructee "(,)" [Number 2, Number 2]
+            run "( 2, 2 )" `shouldReturn` Constructee "(,)" [Number 2, Number 2]
 
     describe "Equality" $ do 
         it "supports basic equality" $ do

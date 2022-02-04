@@ -10,12 +10,14 @@ data Op
     | Pair
     | EqEq 
     | Neq
+    | Seq
     deriving (Eq, Show)
 
 data Lit
     = Str Text
     | Num Double
     | Boolean Bool
+    | Unit
     deriving (Eq, Show)
 
 data Pattern 

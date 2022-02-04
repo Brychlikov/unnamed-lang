@@ -11,7 +11,7 @@ import qualified Data.Set as Set
 import GHC.RTS.Flags (DoTrace(TraceStderr))
 import Ast.Normal
 import Data.Fix
-import Ast.Common (Lit (Str, Num, Boolean), Pattern (PVar), )
+import Ast.Common (Lit (Str, Num, Boolean, Unit), Pattern (PVar, PNull, PCon), )
 import qualified Ast.Common as C
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
@@ -76,8 +76,8 @@ makeFunc ts restype = generalize' emptyEnv $ foldr tArr restype ts
 
 conType :: DataDecl -> ConDecl -> Type
 conType (DataDecl con tp _ ) (ConDecl cname ts) =
-    traceMsgWith show ("making constructor for " ++ unpack cname) $ makeFunc ts tp
-    -- makeFunc ts tp
+    -- traceMsgWith show ("making constructor for " ++ unpack cname) $ makeFunc ts tp
+    makeFunc ts tp
 
 conPred :: DataDecl -> ConDecl -> Type
 conPred (DataDecl con tp _) (ConDecl cname ts) =
@@ -144,12 +144,16 @@ startingEnv = TypeEnv (map, [])
                                 (tArr (TVar $ TV "a")
                                         (TVar $ TV "b") )))
         , ("print", TScheme (Forall [TV "a"] (tArr (TVar $ TV "a") tUnit)))
+        , ("println", TScheme (Forall [TV "a"] (tArr (TVar $ TV "a") tUnit)))
         , ("fst", TScheme (Forall [TV "a", TV "b"]
                                 (tArr (tupleApplication (TVar $ TV "a") (TVar $ TV "b") )
                                         (TVar $ TV "a"))))
         , ("snd", TScheme (Forall [TV "a", TV "b"]
                                 (tArr (tupleApplication (TVar $ TV "a") (TVar $ TV "b") )
                                         (TVar $ TV "b"))))
+        , ("(;)", TScheme (Forall [TV "a"]
+                                (tArr tUnit (TVar $ TV "a"))))
+        , ("error", TScheme (Forall [TV "a"] $ tString `tArr` TVar (TV "a")))
         ]
 
 lookupEnv :: Var -> Infer Type
@@ -299,6 +303,7 @@ litType :: Lit -> Type
 litType (Str _    ) = tString
 litType (Num _    ) = tNum
 litType (Boolean _) = tBoolean
+litType Unit        = tUnit
 
 -- infer, but sad and basic :(
 inferSB :: Expr -> Infer (AnnotatedExpr Type)
@@ -324,10 +329,20 @@ inferSB = inner . unwrap . coerceAnnotation where
         res@(rt :< _) <- inExtended (x, TScheme schema) (inner $ unwrap e2)
         return $ rt :< Let (PVar x) binder res
 
+    inner (Let PNull e1 e2) = do
+        binder <- inner $ unwrap e1
+        res@(rt :< _) <- inner $ unwrap e2
+        return $ rt :< Let PNull binder res
+
+
+    inner (Let (PCon _ _)_ _) = undefined
+
     inner (Lambda (PVar x) e) = do
         tp <- fresh
         res@(rt :< _) <- inExtended (x, tp) (inner $ unwrap e)
         return $ tArr tp rt :< Lambda (PVar x) res
+
+    inner (Lambda _ e) = undefined
 
     inner (Cond ec et ef) = do
         trcond@(tc :< _) <- inner $ unwrap ec
@@ -371,7 +386,7 @@ inferSB = inner . unwrap . coerceAnnotation where
             getConType cname = do
                 res <- asks (Map.lookup cname . fst . unTypeEnv)
                 case res of
-                    Just t -> return $ (traceShowId $ getRetType t)
+                    Just t -> return $ getRetType t
                     Nothing -> lift $ throwE $ MiscError "aaaaaaaaaa"
 
             getRetType (TApp (TApp (TCon c) t2) t) | c == cArrow = getRetType t
@@ -380,12 +395,12 @@ inferSB = inner . unwrap . coerceAnnotation where
             getRetType t = t
 
             typeEquality :: Type -> Type -> Bool
-            typeEquality t1 t2 = case runExcept $ runSolver [(t1, t2)] of 
+            typeEquality t1 t2 = case runExcept $ runSolver [(t1, t2)] of
                 Left _ -> False
                 Right _ -> True
 
             getType (t :< _) = t
-    inner _ = undefined
+
 
 
 

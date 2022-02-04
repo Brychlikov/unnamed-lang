@@ -23,7 +23,7 @@ import Data.List.NonEmpty ( NonEmpty((:|)) )
 import Debug.Trace (traceShowId)
 
 
-data Tail = Tail | NonTail
+data Tail = Tail | NonTail deriving Show
 
 data ProcessedProg = ProcessedProg
     { decls        :: [DataDecl]
@@ -41,10 +41,13 @@ markTailCalls :: TypedExpr -> AnnotatedExpr (Tail, Type)
 markTailCalls = aux NonTail where
     aux tail (t :< (Const l)) = (NonTail, t) :< Const l
     aux tail (t :< (Var v)) = (NonTail, t) :< Var v
+    -- you may not like it, but this is what peak performance looks like
+    aux tail (t :< (Call (t1 :< Call (t11 :< Var "(;)") e1) e2)) 
+           = (tail, t) :< Call ((NonTail, t1) :< Call ((NonTail, t11) :< Var "(;)") (aux NonTail e1)) (traceShowId $ aux tail e2)
     aux tail (t :< (Call e1 e2)) = (tail, t) :< Call (aux NonTail e1) (aux NonTail e2)
     -- TODO: I miss some tail calls here, eg
     -- let x = f 10 in x
-    aux tail (t :< (Let pat e1 e2)) = (tail, t) :< Let pat (aux NonTail e1) (aux NonTail e2)
+    aux tail (t :< (Let pat e1 e2)) = (tail, t) :< Let pat (aux NonTail e1) (aux tail e2)
     aux tail (t :< (LFix n e)) = (tail, t) :< LFix n (aux NonTail e)
     aux tail (t :< (Lambda pat e)) = (tail, t) :< Lambda pat (aux Tail e)
     aux tail (t :< (Cond ec et ef)) = (tail, t) :< Cond (aux NonTail ec) (aux tail et) (aux tail ef)
@@ -60,6 +63,7 @@ emitLit (C.Str t) = surround "\"" "\"" (tell t)
 emitLit (C.Num x) = tell $ T.pack $ show x
 emitLit (C.Boolean True) = tell "true"
 emitLit (C.Boolean False) = tell "false"
+emitLit C.Unit = tell "unit";
 
 nameToJs :: T.Text -> T.Text
 nameToJs name = Map.findWithDefault name name dict where
@@ -71,6 +75,7 @@ nameToJs name = Map.findWithDefault name name dict where
         , ("(,)", "pair")
         , ("(==)", "eq")
         , ("(!=)", "neq")
+        , ("(;)", "seq")
         ]
 
 surround :: T.Text -> T.Text ->  Comp a -> Comp a
@@ -276,7 +281,7 @@ compileLetDecl (Simple (C.PVar name) e) = do
     tell name
     tell "= "
     compile e
-    tell ";"
+    tell ";\n"
 
 compileLetDecl (Simple (C.PNull) e) = do 
     compile e 
@@ -304,7 +309,8 @@ compileProgSrc s = do
 
 compileProgWithStd :: T.Text -> IO (Either String T.Text)
 compileProgWithStd s = do 
-    let res = compileProgSrc s 
+    langStd <- readFile "std.lang"
+    let res = compileProgSrc (langStd `T.append` s) 
     case res of 
         Left err -> return $ Left err 
         Right code -> do 
@@ -316,10 +322,17 @@ runJSCode t = shelly $ print_stdout False $  do
     setStdin t
     run "node" []
 
-runCompiled :: T.Text -> IO T.Text
-runCompiled s = do
+runCompiledExpr :: T.Text -> IO T.Text
+runCompiledExpr s = do
     prelude <- readFile "std.js"
     case compileSrc s of
         Left err -> return $ T.pack err
         Right js -> runJSCode (prelude `T.append` js)
 
+
+runCompiledStd :: T.Text -> IO (Either String T.Text)
+runCompiledStd s = do 
+    c <- compileProgWithStd s
+    case c of 
+        Left err -> return $ Left err
+        Right js -> Right <$> runJSCode js

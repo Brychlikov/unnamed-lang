@@ -67,6 +67,9 @@ spec = do
         "let f x = (x, x) in f" `shouldType`
             TScheme (Forall [TV "a"]
                 (TVar (TV "a") `tArr` (TCon tup `TApp` TVar (TV "a") `TApp` TVar (TV "a"))))
+
+    it "types unit" $ 
+        "()" `shouldType` tUnit
     
     it "types a simple program" $ do 
         progShouldType "let x = 42\ 

@@ -1,0 +1,54 @@
+data List a 
+= Empty 
+| Cons a (List a)
+
+data Option a 
+= None 
+| Some a
+
+let length xs = 
+    let inner acc xs = match xs with 
+    | Empty    -> acc
+    | Cons _ t -> inner (acc + 1) t
+    end
+    in 
+    inner 0 xs
+
+
+let append xs ys = match xs with 
+| Empty    -> ys 
+| Cons h t -> Cons h (append t ys)
+end
+
+
+let revappend xs ys = match xs with 
+| Empty -> ys 
+| Cons h t -> revappend t (Cons h ys)
+end
+
+
+let map f xs = match xs with 
+| Empty    -> Empty 
+| Cons h t -> Cons (f h) (map f t)
+end
+
+
+let foldr f i xs = match xs with 
+| Empty    -> i 
+| Cons h t -> f h (foldr f i t)
+end
+
+
+let find f xs = match xs with 
+| Empty    -> None 
+| Cons h t -> if f h then Some h else find f t
+end
+
+let assoc k ass = 
+    let p_opt = find (fun p -> fst p == k) ass in 
+    match p_opt with 
+    | Some p -> snd p 
+    | None   -> None 
+    end 
+
+

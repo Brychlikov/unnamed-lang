@@ -21,7 +21,7 @@ shouldType :: Text -> Type -> Expectation
 shouldType src tp = do
     let Right expr         = lower <$> runParser pExpr "" src
         Right (resTp :< _) = runExcept $ typeExpr expr
-    tp `typeEq` tp
+    tp `typeEq` resTp
 
 shouldNotType :: Text -> Expectation
 shouldNotType src = do
@@ -67,6 +67,9 @@ spec = do
         "let f x = (x, x) in f" `shouldType`
             TScheme (Forall [TV "a"]
                 (TVar (TV "a") `tArr` (TCon tup `TApp` TVar (TV "a") `TApp` TVar (TV "a"))))
+
+    it "can generalize redefinition of print" $ do 
+        "let f x = print x in f" `shouldType` TScheme (Forall [TV "a"] ((TVar $ TV "a") `tArr` tUnit))
 
     it "types unit" $ 
         "()" `shouldType` tUnit

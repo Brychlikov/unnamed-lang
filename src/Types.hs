@@ -5,7 +5,7 @@ import qualified Ast.Common as C
 import Control.Comonad.Cofree
 import Data.Fix (Fix(unFix))
 import Control.Comonad (Comonad(extract))
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Data.List (find)
 import Text.Printf (printf)
 
@@ -32,38 +32,56 @@ tup = Constructor
     , kind = KType `KArr` (KType `KArr` KType)
 }
 
-tNum :: Type
-tNum = TCon Constructor
+cNum :: Constructor
+cNum = Constructor
     { name = "Number"
     , kind = KType
     }
 
-tBoolean :: Type
-tBoolean = TCon Constructor
+cBoolean :: Constructor
+cBoolean = Constructor
     { name = "Boolean"
     , kind = KType
     }
 
-tString :: Type
-tString = TCon Constructor
+cString :: Constructor
+cString = Constructor
     { name = "String"
     , kind = KType
     }
 
-tUnit :: Type
-tUnit = TCon Constructor
+cUnit :: Constructor
+cUnit = Constructor
     { name = "Unit"
     , kind = KType
     }
 
+tNum :: Type
+tNum = TCon cNum
+
+tBoolean :: Type
+tBoolean = TCon cBoolean
+
+tString :: Type
+tString = TCon cString
+
+tUnit :: Type
+tUnit = TCon cUnit
+
 cArrow :: Constructor
 cArrow = Constructor
     { name = "(->)"
-    , kind = KType `KArr` KType
+    , kind = KType `KArr` (KType `KArr` KType)
     }
 
+cList :: Constructor 
+cList = Constructor "List" (KType `KArr` KType)
+
+builtinConstrs :: [Constructor]
+builtinConstrs = [cBoolean, cString, cNum, cUnit, cArrow, cList]
+
 tArr :: Type -> Type -> Type
-tArr t1 = TApp (TApp (TCon cArrow) t1)
+tArr t1 t2 = TApp (TApp (TCon cArrow) t1) t2
 
 checkKind :: Type -> Kind
 checkKind (TCon con) = kind con
@@ -98,10 +116,10 @@ data TypeError
     | MiscError Text
 
 instance Show TypeError where
-    show (TypeMismatch t1 t2) = printf "TypeError: expected %s, got %s" (show t1) (show t2)
+    show (TypeMismatch t1 t2) = printf "TypeError: expected %s, got %s" (displayType t1) (displayType t2)
     show (UnboundVariable v)  = printf "UnboundVariable: %s" v
-    show (InfiniteType tv t)  = printf "InfiniteType: %s occurs within %s" (show tv) (show t)
-    show (UnificationFail t1 t2)       = printf "UnificationFail: can't unify %s with %s" (show t1) (show t2)
+    show (InfiniteType tv t)  = printf "InfiniteType: %s occurs within %s" (show tv) (displayType t)
+    show (UnificationFail t1 t2)       = printf "UnificationFail: can't unify %s with %s" (displayType t1) (displayType t2)
     show (UnificationMismatch ts1 ts2) = printf "UnificationMismatch: %s doesn't fit %s" (show ts1) (show ts2)
     show (MiscError msg)      = printf "MiscError: %s" msg
     show (KindError ct k1 k2)     = printf "%s was expected to be of kind %s, but has kind %s" (show ct) (show k1) (show k2)
@@ -141,17 +159,27 @@ evalType = inner KType where
 
     inner ex constrs ct@(C.App ct1 ct2) = do
         t1 <- inner (KType `KArr` ex) constrs ct1 
-        t2 <- inner ex constrs ct2 
+        t2 <- inner KType constrs ct2 
         Right $ TApp t1 t2
 
 
+displayKind :: Kind -> String
+displayKind KType = "*"
+displayKind (KArr k1 k2) = "(" ++ displayKind k1 ++ " => " ++ displayKind k2 ++ ")"
+
+displayType :: Type -> String
+displayType (TVar (TV x)) =  unpack x
+displayType (TScheme (Forall vars t)) = "∀" ++ concatMap (\(TV x) -> unpack x) vars ++ displayType t
+-- displayType (TArr t1 t2) = "(" ++ displayType t1 ++ "->" ++ displayType t2 ++ ")"
+displayType (TCon constr) = (unpack . name) constr
+displayType (TApp t1 t2) = "(" ++ displayType t1 ++  " " ++ displayType t2 ++ ")"
 
     -- annotateM :: (Functor f, Monad m) => (f (m (Cofree f a)) -> m )
 
 -- annotateM :: Monad m => (ExprF (Cofree ExprF (m a)) -> m (Cofree ExprF a)) 
 --                      -> Cofree ExprF b 
 --                      -> m (Cofree ExprF a)
--- annotateM func = go where 
+-- annotateM func = go where
 --     -- ExprF (Cofree ExprF b)
 --     -- ExprF (m (Cofree ExprF a))
 --     fork :: Monad m => ExprF (m (Cofree ExprF a)) -> m (ExprF (Cofree ExprF (m a)))

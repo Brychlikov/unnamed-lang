@@ -7,18 +7,12 @@ import Data.Text (Text)
 import qualified Ast.Common as C
 import Text.Megaparsec (runParser)
 
-cList :: Constructor
-cList = Constructor  "List"    (KType `KArr` KType)
-
-constrs :: [Constructor]
-constrs = [ Constructor  "Number"  KType 
-         , Constructor  "Boolean" KType 
-         , cList]
 
 tShouldSucceedOn :: Text -> Type -> Expectation
 tShouldSucceedOn src ex = 
-    case evalType constrs $ pTypeUnwrap src of 
-        Left err  -> expectationFailure (show err)
+    let tp = pTypeUnwrap src in
+    case evalType builtinConstrs tp of 
+        Left err  -> expectationFailure (show err ++ " on type " ++ show tp)
         Right res -> res `shouldBe` ex
 
 pTypeUnwrap :: Text -> C.Type
@@ -32,6 +26,10 @@ spec = do
             "Boolean" `tShouldSucceedOn` tBoolean
         it "evals applied constructors" $ do 
             "List Number" `tShouldSucceedOn` (TApp (TCon cList) tNum)
+
+        it "evals function types" $ do 
+            "Number -> Number"   `tShouldSucceedOn` (tNum `tArr` tNum)
+            "(Number -> Number)" `tShouldSucceedOn` (tNum `tArr` tNum)
 
 
 

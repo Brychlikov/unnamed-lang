@@ -30,6 +30,9 @@ import Data.Maybe (fromMaybe, fromJust)
 import Data.Bifunctor (second)
 import GHC.Base (thenIO)
 import Data.List (find)
+import Text.Megaparsec (runParser, errorBundlePretty)
+import Parser (pExpr)
+import Ast.Lower (lower)
 
 type Var = Text
 
@@ -48,7 +51,7 @@ extend :: TypeEnv -> (Var, Type) -> TypeEnv
 extend (TypeEnv (env, cs)) (x, t) = TypeEnv (Map.insert x t env, cs)
 
 emptyEnv :: TypeEnv
-emptyEnv = TypeEnv (Map.empty, [])
+emptyEnv = TypeEnv (Map.empty, builtinConstrs)
 
 tupleApplication :: Type -> Type -> Type
 tupleApplication t1 = TApp (TApp (TCon tup) t1)
@@ -76,8 +79,8 @@ makeFunc ts restype = generalize' emptyEnv $ foldr tArr restype ts
 
 conType :: DataDecl -> ConDecl -> Type
 conType (DataDecl con tp _ ) (ConDecl cname ts) =
-    -- traceMsgWith show ("making constructor for " ++ unpack cname) $ makeFunc ts tp
-    makeFunc ts tp
+    traceMsgWith displayType ("making constructor for " ++ unpack cname) $ makeFunc ts tp
+    -- makeFunc ts tp
 
 conPred :: DataDecl -> ConDecl -> Type
 conPred (DataDecl con tp _) (ConDecl cname ts) =
@@ -125,7 +128,7 @@ addDataDeclaration' dd@(DataDecl con tp constrs) (TypeEnv (env, cs)) = TypeEnv (
 
 
 startingEnv :: TypeEnv
-startingEnv = TypeEnv (map, [])
+startingEnv = TypeEnv (map, builtinConstrs)
     where
     map = Map.fromList
         [ ("(+)", tArr tNum (tArr tNum tNum))
@@ -159,7 +162,8 @@ startingEnv = TypeEnv (map, [])
 lookupEnv :: Var -> Infer Type
 lookupEnv v = do
     (TypeEnv (env, cs)) <- ask
-    let res = Map.lookup v env
+    let res = Map.lookup v (traceMsgWith displayTypeMap ("lookup of " ++ T.unpack v) env)
+    -- let res = Map.lookup v env
     case res of
         Just (TScheme s) -> instantiate s
         Just t -> return t
@@ -167,16 +171,6 @@ lookupEnv v = do
 
 newtype InferState = InferState Int
 
-displayKind :: Kind -> String
-displayKind KType = "*"
-displayKind (KArr k1 k2) = "(" ++ displayKind k1 ++ " => " ++ displayKind k2 ++ ")"
-
-displayType :: Type -> String
-displayType (TVar (TV x)) =  unpack x
-displayType (TScheme s) = show s
--- displayType (TArr t1 t2) = "(" ++ displayType t1 ++ "->" ++ displayType t2 ++ ")"
-displayType (TCon constr) = (unpack . name) constr
-displayType (TApp t1 t2) = "(" ++ displayType t1 ++  " " ++ displayType t2 ++ ")"
 
 type Constraint = (Type, Type)
 
@@ -184,8 +178,14 @@ displayConstraint :: Constraint -> String
 displayConstraint (t1, t2) = displayType t1  ++ "~~" ++ displayType t2
 
 displayConstraints :: [Constraint] -> String
-displayConstraints = (++"]") . foldl (\s c -> s ++ displayConstraint c ++ ",") "["
+displayConstraints = (++"]") . foldl (\s c -> s ++ displayConstraint c ++ ",\n") "["
 
+displaySubst :: Subst -> String
+displaySubst env = "[" ++ Map.foldrWithKey (\(TV name) tp acc -> printf "%s -> %s, \n%s" name (displayType tp) acc) "]" env
+
+
+displayTypeMap :: Map.Map Var Type -> String 
+displayTypeMap env = "[" ++ Map.foldrWithKey (\name tp acc -> printf "%s : %s, \n%s" name (displayType tp) acc) "]" env
 
 type Infer  = (RWST
                 TypeEnv
@@ -280,6 +280,10 @@ instantiate (Forall frees t) = do
     let subst = Map.fromList $ zip frees frees'
     return $ apply subst t
 
+instantiate' :: Type -> Infer Type
+instantiate' (TScheme s) = instantiate s
+instantiate' t = return t
+
 generalize :: TypeEnv -> Type -> Scheme
 generalize env t = Forall frees t
     where frees = Set.elems $ ftv t `Set.difference` ftv env
@@ -325,7 +329,11 @@ inferSB = inner . unwrap . coerceAnnotation where
     inner (Let (PVar x) e1 e2) = do
         env <- ask
         binder@(t1 :< _) <- inner (unwrap e1)
-        let schema = generalize env t1
+        let TypeEnv (e, _)= env
+            genenv = case Map.lookup x e of 
+                Just v -> extend env (x, (trace "GOT THIS STUPID VALUE" v))
+                Nothing -> env
+        let schema = generalize genenv t1
         res@(rt :< _) <- inExtended (x, TScheme schema) (inner $ unwrap e2)
         return $ rt :< Let (PVar x) binder res
 
@@ -361,7 +369,9 @@ inferSB = inner . unwrap . coerceAnnotation where
 
     inner (Switch e arms) = do
         matchee@(subtype :< _) <- inner $ unwrap e
-        pattype <- getPatType (map fst arms)
+        nonGenPattype <- getPatType (map fst arms)
+        env <- ask
+        pattype <- instantiate' $ generalize' env (traceMsgWith displayType "Got pattern type" nonGenPattype)
         subtype ~~ pattype
         tres <- fresh
         let armLabels = map fst arms
@@ -448,9 +458,11 @@ tryTE (Left err) = lift $ throwE err
 inferProg :: Prog -> Infer ([DataDecl], [LetBindingF TypedExpr])
 inferProg (Prog datas lets) = do
 
+    TypeEnv (ts, defCs) <- ask
+
     (constrs, datadecls) <- tryTE $ foldrM (\d (cs, res) -> do
             dd@(DataDecl c tp cds) <- evalDataDeclaration cs d
-            return (c:cs, dd:res) ) ([], []) datas
+            return (c:cs, dd:res) ) (defCs, []) datas
 
     let TypeEnv (beginEnv, cons) = foldr addDataDeclaration' startingEnv datadecls
 
@@ -458,28 +470,41 @@ inferProg (Prog datas lets) = do
         tv <- fresh
         case pat of
             C.PNull -> return acc
-            C.PVar name -> return $ Map.insert name tv acc
+            C.PVar name -> return $ Map.insert name (trace (show name ++  " gets " ++ show tv) tv) acc
             C.PCon _ _ -> error "TODO"
         )
         beginEnv
         lets
 
+    let tEnv' = TypeEnv (beginEnv', cons)
+
     typedLets <-mapM (\(Simple pat te) -> do
              tv <- case pat of
-                 C.PVar name -> local (const $ TypeEnv (beginEnv', cons)) $ asks (fromJust . Map.lookup name . fst . unTypeEnv)
+                 C.PVar name -> local (const tEnv') $ asks (fromJust . Map.lookup name . fst . unTypeEnv)
                  C.PNull -> fresh
                  C.PCon _ _ -> error "TODO"
-             tres :< resTree <- local (const $ TypeEnv (beginEnv', cons)) $ inferSB te
+
+             res <- lift $ runInfer' tEnv'  $ inferSB te
+             nonGenType :< resTree <- local (const tEnv') $ inferSB te
+            --  let tres = generalize' tEnv' nonGenType
+            --  tres <- instantiate' $ generalize' tEnv' nonGenType
+            --  let tres = trace (show (ftv tEnv')) $ traceMsgWith displayType "nonGenType is " nonGenType
+             let tres = nonGenType
              tv ~~ tres
              return $ Simple pat (tres :< resTree)
              )
            lets
     return (datadecls, typedLets)
 
-runInfer :: Infer a -> Except TypeError ([Constraint], a)
+runInfer' :: TypeEnv -> Infer a -> Except TypeError ([Constraint], a, TypeEnv)
+runInfer' e i = do
+    ((x, env), y) <- evalRWST (i >>= \a -> (,) a <$> ask) e (InferState 0)
+    return (y, x, env)
+
+runInfer :: Infer a -> Except TypeError ([Constraint], a, TypeEnv)
 runInfer i = do
-    (x, y) <- evalRWST i startingEnv (InferState 0)
-    return (y, x)
+    ((x, env), y) <- evalRWST (i >>= \a -> (,) a <$> ask) startingEnv (InferState 0)
+    return (y, x, env)
 
 type Unifier = (Subst, [Constraint])
 type Solve = S.StateT Unifier (Except TypeError)
@@ -540,14 +565,31 @@ runSolver constraints = fst <$> S.runStateT solver (emptySubst, constraints)
 
 typeExpr :: Expr -> Except TypeError TypedExpr
 typeExpr e = do
-    (constraints, tree) <- runInfer $ inferSB e
-    subst <- runSolver constraints
-    return $ apply subst tree
+    (constraints, tree, _) <- runInfer $ inferSB e
+    subst <- runSolver (traceMsgWith displayConstraints "expr gen constraints" constraints)
+    return $ apply (traceMsgWith displaySubst "solution" subst) tree
+
+getLabel :: AnnotatedExpr a -> a
+getLabel (l :< _) = l
+
+typeExprSource :: Text -> Except TypeError String
+typeExprSource src = case runParser pExpr "" src of
+    Left b -> error $ errorBundlePretty b
+    Right t -> displayType . getLabel <$> typeExpr (lower t)
+
+secondLast :: [a] -> a
+secondLast [] = undefined
+secondLast [a, l] = a
+secondLast (a:t) = secondLast t
+
+traceType :: LetBindingF TypedExpr -> LetBindingF TypedExpr
+traceType l@(Simple (PVar name) (t :< _)) = trace (printf "%s: %s" name (displayType t)) l
+traceType l = l
 
 typeProg :: Prog -> Except TypeError ([DataDecl], [LetBindingF TypedExpr])
 typeProg p@(Prog datas lets) = do
-    (constraints, (evaledDatas, typedLets)) <- runInfer $ inferProg p
-    subst <- runSolver constraints
+    (constraints, (evaledDatas, typedLets), _) <- runInfer $ inferProg p
+    subst <- runSolver (traceMsgWith displayConstraints "generated constraints" constraints)
     let solvedLets = apply subst typedLets
-    return (evaledDatas, solvedLets)
+    return (evaledDatas, map traceType solvedLets)
 

@@ -2,44 +2,23 @@ data List a
 = Empty 
 | Cons a (List a)
 
-data Option a 
-= None 
-| Some a
+# let length xs = match xs with 
+# | Empty    -> 0
+# | Cons h t -> 1 + (length t)
+# end
 
-let length xs = 
-    let inner acc xs = match xs with 
-    | Empty    -> acc
-    | Cons _ t -> inner (acc + 1) t
-    end
-    in 
-    inner 0 xs
+# let length xs = 
+#     let inner xs = match xs with 
+#     | Empty    -> 0
+#     | Cons h t -> 1 + (length t) 
+#     end 
+#     in inner xs
+# let append xs ys = match xs with 
+# | Empty    -> ys 
+# | Cons h t -> Cons h (append t ys)
+# end
 
+let print2 x = let inner x = print x in inner
 
-let append xs ys = match xs with 
-| Empty    -> ys 
-| Cons h t -> Cons h (append t ys)
-end
-
-
-let revappend xs ys = match xs with 
-| Empty -> ys 
-| Cons h t -> revappend t (Cons h ys)
-end
-
-
-let map f xs = match xs with 
-| Empty    -> Empty 
-| Cons h t -> Cons (f h) (map f t)
-end
-
-
-let foldr f i xs = match xs with 
-| Empty    -> i 
-| Cons h t -> f h (foldr f i t)
-end
-
-
-let find f xs = match xs with 
-| Empty    -> None 
-| Cons h t -> if f h then Some h else find f t
-end
+# let pff = print 10
+# let pff' = print false

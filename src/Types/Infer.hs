@@ -157,7 +157,6 @@ startingEnv = TypeEnv (map, builtinConstrs)
         , ("(;)", Forall [TV "a"]
                                 (tArr tUnit (TVar $ TV "a")))
         , ("error", Forall [TV "a"] $ tString `tArr` TVar (TV "a"))
-        , ("fix", Forall [TV "a"] ((TVar $ TV "a") `tArr`(TVar $ TV "a") `tArr` ((TVar $ TV "a") `tArr` (TVar $ TV "a"))) )
         ]
 
 lookupEnv :: Var -> Infer Type

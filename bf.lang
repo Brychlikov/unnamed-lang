@@ -40,7 +40,7 @@ let parseBF cs = match cs with
 | Empty -> [] 
 | Cons h t -> 
     let r = takeUntil (fun c -> c == "[") cs  in 
-    #let cmds = map parseSingle (fst r) in 
+    let cmds = map parseSingle (fst r) in 
 #    let r2 = takeUntil (fun c -> c == "]") (snd r) in 
 #    let whileCmd = While (map parseSingle (fst r2)) in 
 #    let rest = parseBF (snd r2) in 

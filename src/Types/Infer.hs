@@ -79,13 +79,8 @@ makeFunc ts restype = generalize emptyEnv $ foldr tArr restype ts
 
 conType :: DataDecl -> ConDecl -> Scheme
 conType (DataDecl con tp _ ) (ConDecl cname ts) =
-<<<<<<< HEAD
     traceMsgWith displayScheme ("making constructor for " ++ unpack cname) $ makeFunc ts tp
     -- makeFunc ts tp
-=======
-    -- traceMsgWith show ("making constructor for " ++ unpack cname) $ makeFunc ts tp
-    makeFunc ts tp
->>>>>>> c8e90e1 (std and some tests)
 
 conPred :: DataDecl -> ConDecl -> Scheme
 conPred (DataDecl con tp _) (ConDecl cname ts) =
@@ -140,6 +135,7 @@ startingEnv = TypeEnv (map, builtinConstrs)
         , ("(-)", Forall [] $ tArr tNum (tArr tNum tNum))
         , ("(*)", Forall [] $ tArr tNum (tArr tNum tNum))
         , ("(/)", Forall [] $ tArr tNum (tArr tNum tNum))
+        , ("(++)", Forall [] $ tArr tString (tArr tString tString))
         , ("(==)", Forall [TV "a"]
                                 (tArr (TVar $ TV "a") (tArr (TVar $ TV "a") tBoolean)))
         , ("(!=)", Forall [TV "a"]
@@ -150,32 +146,18 @@ startingEnv = TypeEnv (map, builtinConstrs)
                                             (tupleApplication (TVar $ TV "a") (TVar $ TV "b") ))))
         , ("magic", Forall [TV "a", TV "b"]
                                 (tArr (TVar $ TV "a")
-<<<<<<< HEAD
                                         (TVar $ TV "b") ))
         , ("print", Forall [TV "a"] (tArr (TVar $ TV "a") tUnit))
         , ("println", Forall [TV "a"] (tArr (TVar $ TV "a") tUnit))
         , ("fst", Forall [TV "a", TV "b"]
-=======
-                                        (TVar $ TV "b") )))
-        , ("print", TScheme (Forall [TV "a"] (tArr (TVar $ TV "a") tUnit)))
-        , ("println", TScheme (Forall [TV "a"] (tArr (TVar $ TV "a") tUnit)))
-        , ("fst", TScheme (Forall [TV "a", TV "b"]
->>>>>>> c8e90e1 (std and some tests)
                                 (tArr (tupleApplication (TVar $ TV "a") (TVar $ TV "b") )
                                         (TVar $ TV "a")))
         , ("snd", Forall [TV "a", TV "b"]
                                 (tArr (tupleApplication (TVar $ TV "a") (TVar $ TV "b") )
-<<<<<<< HEAD
                                         (TVar $ TV "b")))
         , ("(;)", Forall [TV "a"]
                                 (tArr tUnit (TVar $ TV "a")))
         , ("error", Forall [TV "a"] $ tString `tArr` TVar (TV "a"))
-=======
-                                        (TVar $ TV "b"))))
-        , ("(;)", TScheme (Forall [TV "a"]
-                                (tArr tUnit (TVar $ TV "a"))))
-        , ("error", TScheme (Forall [TV "a"] $ tString `tArr` TVar (TV "a")))
->>>>>>> c8e90e1 (std and some tests)
         ]
 
 lookupEnv :: Var -> Infer Type
@@ -415,11 +397,7 @@ inferSB = inner . unwrap . coerceAnnotation where
             getConType cname = do
                 res <- asks (Map.lookup cname . fst . unTypeEnv)
                 case res of
-<<<<<<< HEAD
                     Just (Forall _ t) -> return $ getRetType t
-=======
-                    Just t -> return $ getRetType t
->>>>>>> c8e90e1 (std and some tests)
                     Nothing -> lift $ throwE $ MiscError "aaaaaaaaaa"
 
             getRetType (TApp (TApp (TCon c) t2) t) | c == cArrow = getRetType t

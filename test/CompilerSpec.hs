@@ -40,7 +40,6 @@ spec = do
 -- WATCH OUT FOR PITFALL
 -- Shelly automatically adds newlines at the end of output if there is none
 -- I drop it in shouldPrint
-<<<<<<< HEAD
     -- describe "Compiler implementation" $ do
     --     it "can test output" $ do
     --         "let _ = print 20" `shouldPrint` "20"
@@ -57,23 +56,5 @@ spec = do
         --         "let equal x y = x == y \ 
         --         \let _ = match (find (equal 10) [1, 3, 1, 2, 10, 53, 1]) with \ 
         --         \| Some v -> print v end" `shouldPrint` "10"
-=======
-    describe "Compiler implementation" $ do
-        it "can test output" $ do
-            "let _ = print 20" `shouldPrint` "20"
-            "let _ = println 20" `shouldPrint` "20"
-
-        context "lists" $ do 
-            it "has lists in prelude" $ do 
-                "let _ = print (length [1, 2, 3])" `shouldPrint` "3"
-            it "has map in prelude" $ do 
-                "let adds x y = x + y \ 
-                \let _ = print ((map (adds 1) [1, 2, 3]) == [2, 3, 4])" `shouldPrint` "true"
-
-            it "has find in prelude" $ do 
-                "let equal x y = x == y \ 
-                \let _ = match (find (equal 10) [1, 3, 1, 2, 10, 53, 1]) with \ 
-                \| Some v -> print v end" `shouldPrint` "10"
->>>>>>> c8e90e1 (std and some tests)
             
     

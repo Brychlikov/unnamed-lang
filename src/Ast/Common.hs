@@ -11,6 +11,7 @@ data Op
     | EqEq 
     | Neq
     | Seq
+    | Concat
     deriving (Eq, Show)
 
 data Lit

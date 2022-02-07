@@ -88,6 +88,18 @@ function seq(x) {
     }
 }
 
+let strConcat = add;
+
+function charList(str) {
+    let splt = str.split("");
+    let s = splt.reverse();
+    let res = {conTag: "Empty", children: []};
+    for(const c of s) {
+        res = {conTag: "Cons", children: [c, res]};
+    }
+    return res;
+} 
+
 function error(t) {
     throw new Error(t);
 }

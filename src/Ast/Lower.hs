@@ -21,6 +21,7 @@ lower (F.Binop op e1 e2) = ecall (ecall (evar $ op_to_name op) (lower e1)) (lowe
     op_to_name EqEq  = "(==)"
     op_to_name Neq   = "(!=)"
     op_to_name Seq  = "(;)"
+    op_to_name Concat = "(++)"
 
 lower (F.Neg e) = ecall (evar "negate") (lower e)
 

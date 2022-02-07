@@ -38,8 +38,34 @@ let foldr f i xs = match xs with
 | Cons h t -> f h (foldr f i t)
 end
 
+let reverse xs = 
+    let inner acc ys = match ys with 
+    | Empty -> acc 
+    | Cons h t -> inner (Cons h acc) t 
+    end 
+    in 
+    inner [] xs
+
 
 let find f xs = match xs with 
 | Empty    -> None 
 | Cons h t -> if f h then Some h else find f t
 end
+
+let printList xs = 
+    let inner xs = match xs with 
+    | Empty    -> print "]"
+    | Cons h t -> print h; print ", "; inner t
+    end 
+    in 
+    print "["; inner xs
+
+let showList xs = 
+    let inner xs = match xs with 
+    | Empty    -> "]"
+    | Cons h t -> h ++ ", " ++ inner t
+    end 
+    in 
+    "[" ++ inner xs
+
+# you gotta leave some empty space here :)

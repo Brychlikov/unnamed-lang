@@ -80,6 +80,7 @@ nameToJs name = Map.findWithDefault name name dict where
         , ("(==)", "eq")
         , ("(!=)", "neq")
         , ("(;)", "seq")
+        , ("(++)", "strConcat")
         ]
 
 surround :: T.Text -> T.Text ->  Comp a -> Comp a

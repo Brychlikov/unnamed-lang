@@ -1,0 +1,59 @@
+data BF 
+= MoveL
+| MoveR 
+| Inc 
+| Dec 
+| Out
+| While (List BF)
+
+
+
+let showBF bf = match bf with 
+| MoveL -> "MoveL"
+| MoveR -> "MoveR"
+| Inc -> "Inc"
+| Dec -> "Dec"
+| Out -> "Out"
+| While bf1 -> showList (map showBF bf1) 
+end
+
+let showBFs bfs = showList (map showBF bfs)
+
+let takeUntil pred xs = 
+    let inner head tail = match tail with 
+    | Empty -> (reverse head, [])
+    | Cons h t -> if pred h 
+        then (reverse head, t) 
+        else inner (Cons h head) t
+    end 
+    in 
+    inner [] xs
+
+let parseSingle c = 
+    if c == ">" then MoveR else 
+    if c == "<" then MoveL else 
+    if c == "+" then Inc else 
+    if c == "-" then Dec else 
+    if c == "." then Out else error "unknown command"
+
+let parseBF cs = match cs with 
+| Empty -> [] 
+| Cons h t -> 
+    let r = takeUntil (fun c -> c == "[") cs  in 
+    #let cmds = map parseSingle (fst r) in 
+#    let r2 = takeUntil (fun c -> c == "]") (snd r) in 
+#    let whileCmd = While (map parseSingle (fst r2)) in 
+#    let rest = parseBF (snd r2) in 
+    error "whatever"
+#    append cmds (Cons whileCmd rest)
+end
+# 
+# 
+# let r = takeUntil (fun c -> c == "[") cs
+
+# let cs = charList "++->-"
+# let _ = println (showBFs (map parseSingle cs))
+
+let _ = println "witam"
+# 
+# let  _ = println (showBFs [MoveL, MoveL, Inc, While [Inc]])

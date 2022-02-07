@@ -39,6 +39,12 @@ spec = do
             "1 == 0" `eParsesTo` Binop EqEq (Const $ Num 1) (Const $ Num 0)
             "1 != 0" `eParsesTo` Binop Neq (Const $ Num 1) (Const $ Num 0)
 
+        it "parses string literals" $ do
+            "\"a\"" `eParsesTo` Const (Str "a")
+
+        it "parses string concatenation" $ do
+            "\"a\" ++ \"b\"" `eParsesTo` Binop Concat (Const $ Str "a") (Const $ Str "b")
+
         it "parses boolean operators with correct precedence" $ do
             "1 + 1 == 2" `eParsesTo`
                 Binop EqEq
@@ -134,10 +140,10 @@ spec = do
             "[true, false]" `eParsesTo`
                 astCons (Const $ Boolean True) (astCons (Const $ Boolean False) (Var "Empty"))
 
-        it "parses empty lists" $ do 
+        it "parses empty lists" $ do
             "[]" `eParsesTo` Var "Empty"
 
-        it "parses unit" $ do 
+        it "parses unit" $ do
             "()" `eParsesTo` Const Unit
 
     describe "Declaration parser" $ do

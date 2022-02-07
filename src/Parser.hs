@@ -39,7 +39,7 @@ number = choice [ try $ lexeme L.float
                 , try $ lexeme L.decimal ]
 
 stringLiteral :: Parser Text
-stringLiteral = pack <$> (char '"' >> manyTill L.charLiteral (char '"'))
+stringLiteral = pack <$> (lexeme (char '"' >> manyTill L.charLiteral (char '"')))
 
 pString :: Parser Expr
 pString = Const . Str <$> stringLiteral
@@ -144,9 +144,10 @@ pOpExpr = makeExprParser pTerm operatorTable where
       , [ binary "*" (Binop Mult)
         , binary "/" (Binop Div)
         ]
-      , [ binary "+" (Binop Plus)
+      , [ InfixL (Binop Plus <$ (try $ symbol "+" *> notFollowedBy (char '+')))
         , binary "-" (Binop Minus)
         ]
+      , [ binary "++" (Binop Concat)]
       , [ binary "==" (Binop EqEq)
         , binary "!=" (Binop Neq)
         ]

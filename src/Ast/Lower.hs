@@ -31,7 +31,7 @@ lower (F.Let (F.FunBinding name pats e1) e2) =
     --     (elfix (elambda (PVar name) 
     --            (lower $ F.Lambda pats e1)))
     --     (lower e2)
-    elet (PVar name) (elfix name (lower $ F.Lambda pats e1)) (lower e2)
+    elet (PVar name) (elfix (elambda (PVar name) (lower $ F.Lambda pats e1))) (lower e2)
 
 -- lower (F.Let (F.FunBinding name [pat] e1) e2) = elet (FunBinding  name pat (lower e1)) (lower e2)
 -- lower (F.Let (F.FunBinding name (p:pats) e1) e2) = 

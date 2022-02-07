@@ -56,7 +56,7 @@ spec = do
         "let f x y = x + y in f" `shouldType` tArr tNum tNum
         "let f x y z = x + y in let y = f 0 0 0 in f 0 0 true" `shouldType` tNum
         "let f x = x in f" `shouldType`
-            TScheme (Forall [TV "x"] (tArr (TVar $ TV "x") (TVar $ TV "x")))
+             (tArr (TVar $ TV "x") (TVar $ TV "x"))
 
     it "types recursive functions" $ do
         "let sum n = if n == 0 then 0 else n + sum (n-1) in sum" `shouldType` tArr tNum tNum
@@ -65,11 +65,10 @@ spec = do
     it "types tuples" $ do
         "(1, 2)" `shouldType` ((TCon tup `TApp` tNum) `TApp` tNum)
         "let f x = (x, x) in f" `shouldType`
-            TScheme (Forall [TV "a"]
-                (TVar (TV "a") `tArr` (TCon tup `TApp` TVar (TV "a") `TApp` TVar (TV "a"))))
+                (TVar (TV "a") `tArr` (TCon tup `TApp` TVar (TV "a") `TApp` TVar (TV "a")))
 
     it "can generalize redefinition of print" $ do 
-        "let f x = print x in f" `shouldType` TScheme (Forall [TV "a"] ((TVar $ TV "a") `tArr` tUnit))
+        "let f x = print x in f" `shouldType`  ((TVar $ TV "a") `tArr` tUnit)
 
     it "types unit" $ 
         "()" `shouldType` tUnit

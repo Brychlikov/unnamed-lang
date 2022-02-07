@@ -15,7 +15,7 @@ data ExprF a
     | Var Text 
     | Call a a 
     | Let Pattern a a 
-    | LFix Text a
+    | LFix a
     | Lambda Pattern a
     | Cond a a a 
     | Switch a [(Text, a)]
@@ -58,8 +58,9 @@ econd :: Expr -> Expr -> Expr -> Expr
 econd e1 e2 e3 = Fix $ Cond e1 e2 e3
 
 
-elfix :: Text -> Expr -> Expr 
-elfix t e = Fix $ LFix t e
+elfix :: Expr -> Expr 
+elfix e = Fix $ LFix e
+-- elfix = ecall (evar "fix")
 
 eswitch :: Expr -> [(Text, Expr)] -> Expr 
 eswitch e arms = 

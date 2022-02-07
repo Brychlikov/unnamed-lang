@@ -96,7 +96,6 @@ checkKind _ = KType
 
 data Type
     = TVar TVar
-    | TScheme Scheme
     | TCon Constructor
     | TApp Type Type
     deriving (Show, Eq, Ord)
@@ -169,7 +168,6 @@ displayKind (KArr k1 k2) = "(" ++ displayKind k1 ++ " => " ++ displayKind k2 ++ 
 
 displayType :: Type -> String
 displayType (TVar (TV x)) =  unpack x
-displayType (TScheme (Forall vars t)) = "∀" ++ concatMap (\(TV x) -> unpack x) vars ++ displayType t
 -- displayType (TArr t1 t2) = "(" ++ displayType t1 ++ "->" ++ displayType t2 ++ ")"
 displayType (TCon constr) = (unpack . name) constr
 displayType (TApp t1 t2) = "(" ++ displayType t1 ++  " " ++ displayType t2 ++ ")"

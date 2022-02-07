@@ -46,7 +46,7 @@ data Value m
 data Clbl m
     = Builtin (Value m -> m (Value m))
     | Clojure C.Pattern (Env m) (m (Value m))
-    | Fixpoint Text (m (Value m))
+    | Fixpoint (m (Value m))
 
 instance Eq (Clbl m) where
     f == g = False
@@ -54,7 +54,7 @@ instance Eq (Clbl m) where
 instance Show (Clbl m) where
     show (Builtin _) = "<builtin>"
     show Clojure {} = "<clojure>"
-    show (Fixpoint name f) = "<fixpoint of " ++ T.unpack name ++ ">"
+    show (Fixpoint f) = "<fixpoint>"
 
 
 addValues :: Value m -> Value m -> Value m
@@ -151,8 +151,13 @@ call m1 m2= do
         Callable (Builtin g) -> m2 >>= g
         Callable (Clojure pat env body) ->
             m2 >>= (\v2 ->local (const $ Map.union (fromJust $ destructure pat v2) env) body)
-        c@(Callable (Fixpoint name f)) ->
-            local (Map.insert name c) (call f m2)
+        c@(Callable (Fixpoint f)) -> 
+            do 
+                clbl <- f
+                let (lam, name) = case clbl of
+                        c2@(Callable (Clojure (C.PVar name) _ _))  -> (c2, name)
+                        _ -> undefined
+                local (Map.insert name c) (call f m2)
         _ -> throwE "sadly, you called a non-callable :("
 
 
@@ -163,6 +168,7 @@ interpret = foldFix eval where
     eval (A.Const (C.Num x)) = return $ Number x
     eval (A.Const (C.Str s)) = return $ Str s
     eval (A.Const (C.Boolean b)) = return $ Boolean b
+    eval (A.Const C.Unit) = return $ Unit
     eval (A.Var name)        = asks (Map.lookup name) >>= help
         where help :: MonadInterpret m => Maybe (Value m) -> m (Value m)
               help (Just v) = return v
@@ -179,9 +185,10 @@ interpret = foldFix eval where
         env <- ask
         return $ Callable $ Clojure pat env  m
 
-    eval (A.LFix name a) = return $ Callable $ Fixpoint name a
+    eval (A.LFix a) = return $ Callable $ Fixpoint a
 
     eval (A.Cond mb mt mf) = mb >>= (\x -> if isTruthy x then mt else mf)
+    eval (A.Switch _ _) = error "no matches in interpreter, sorry"
 
 
 isTruthy :: Value m -> Bool

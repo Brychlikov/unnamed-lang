@@ -36,7 +36,7 @@ import Ast.Lower (lower)
 
 type Var = Text
 
-newtype TypeEnv = TypeEnv {unTypeEnv :: (Map.Map Var Type, [Constructor])} deriving Show
+newtype TypeEnv = TypeEnv {unTypeEnv :: (Map.Map Var Scheme, [Constructor])} deriving Show
 
 traceMsg :: Show a => String -> a -> a
 -- traceMsg s a = trace (s ++ show a) a
@@ -47,8 +47,8 @@ traceMsgWith' :: (a -> Text) -> Text -> a -> a
 traceMsgWith' f msg a = trace (unpack (msg `T.append` ": " `T.append` f a)) a
 
 
-extend :: TypeEnv -> (Var, Type) -> TypeEnv
-extend (TypeEnv (env, cs)) (x, t) = TypeEnv (Map.insert x t env, cs)
+extend :: TypeEnv -> (Var, Scheme) -> TypeEnv
+extend (TypeEnv (env, cs)) (x, s) = TypeEnv (Map.insert x s env, cs)
 
 emptyEnv :: TypeEnv
 emptyEnv = TypeEnv (Map.empty, builtinConstrs)
@@ -74,19 +74,19 @@ evalDataDeclaration cs (C.DataDecl name varnames consts) = do
     condecs <- mapM (evalConDeclaration (newCon : cs)) consts
     return $ DataDecl newCon newType condecs
 
-makeFunc :: [Type] -> Type -> Type
-makeFunc ts restype = generalize' emptyEnv $ foldr tArr restype ts
+makeFunc :: [Type] -> Type -> Scheme
+makeFunc ts restype = generalize emptyEnv $ foldr tArr restype ts
 
-conType :: DataDecl -> ConDecl -> Type
+conType :: DataDecl -> ConDecl -> Scheme
 conType (DataDecl con tp _ ) (ConDecl cname ts) =
-    traceMsgWith displayType ("making constructor for " ++ unpack cname) $ makeFunc ts tp
+    traceMsgWith displayScheme ("making constructor for " ++ unpack cname) $ makeFunc ts tp
     -- makeFunc ts tp
 
-conPred :: DataDecl -> ConDecl -> Type
+conPred :: DataDecl -> ConDecl -> Scheme
 conPred (DataDecl con tp _) (ConDecl cname ts) =
     makeFunc [tp] tBoolean
 
-conGetters :: DataDecl -> ConDecl -> [(Text, Type)]
+conGetters :: DataDecl -> ConDecl -> [(Text, Scheme)]
 conGetters (DataDecl con tp constrs) (ConDecl cname ts) =
     [
         ("get" `T.append` cname `T.append` T.pack (show n), makeFunc [tp] t)
@@ -131,32 +131,33 @@ startingEnv :: TypeEnv
 startingEnv = TypeEnv (map, builtinConstrs)
     where
     map = Map.fromList
-        [ ("(+)", tArr tNum (tArr tNum tNum))
-        , ("(-)", tArr tNum (tArr tNum tNum))
-        , ("(*)", tArr tNum (tArr tNum tNum))
-        , ("(/)", tArr tNum (tArr tNum tNum))
-        , ("(==)", TScheme (Forall [TV "a"]
-                                (tArr (TVar $ TV "a") (tArr (TVar $ TV "a") tBoolean))))
-        , ("(!=)", TScheme (Forall [TV "a"]
-                                (tArr (TVar $ TV "a") (tArr (TVar $ TV "a") tBoolean))))
-        , ("(,)", TScheme (Forall [TV "a", TV "b"]
+        [ ("(+)", Forall [] $ tArr tNum (tArr tNum tNum))
+        , ("(-)", Forall [] $ tArr tNum (tArr tNum tNum))
+        , ("(*)", Forall [] $ tArr tNum (tArr tNum tNum))
+        , ("(/)", Forall [] $ tArr tNum (tArr tNum tNum))
+        , ("(==)", Forall [TV "a"]
+                                (tArr (TVar $ TV "a") (tArr (TVar $ TV "a") tBoolean)))
+        , ("(!=)", Forall [TV "a"]
+                                (tArr (TVar $ TV "a") (tArr (TVar $ TV "a") tBoolean)))
+        , ("(,)", Forall [TV "a", TV "b"]
                                 (tArr (TVar $ TV "a")
                                         (tArr (TVar $ TV "b")
-                                            (tupleApplication (TVar $ TV "a") (TVar $ TV "b") )))))
-        , ("magic", TScheme (Forall [TV "a", TV "b"]
+                                            (tupleApplication (TVar $ TV "a") (TVar $ TV "b") ))))
+        , ("magic", Forall [TV "a", TV "b"]
                                 (tArr (TVar $ TV "a")
-                                        (TVar $ TV "b") )))
-        , ("print", TScheme (Forall [TV "a"] (tArr (TVar $ TV "a") tUnit)))
-        , ("println", TScheme (Forall [TV "a"] (tArr (TVar $ TV "a") tUnit)))
-        , ("fst", TScheme (Forall [TV "a", TV "b"]
+                                        (TVar $ TV "b") ))
+        , ("print", Forall [TV "a"] (tArr (TVar $ TV "a") tUnit))
+        , ("println", Forall [TV "a"] (tArr (TVar $ TV "a") tUnit))
+        , ("fst", Forall [TV "a", TV "b"]
                                 (tArr (tupleApplication (TVar $ TV "a") (TVar $ TV "b") )
-                                        (TVar $ TV "a"))))
-        , ("snd", TScheme (Forall [TV "a", TV "b"]
+                                        (TVar $ TV "a")))
+        , ("snd", Forall [TV "a", TV "b"]
                                 (tArr (tupleApplication (TVar $ TV "a") (TVar $ TV "b") )
-                                        (TVar $ TV "b"))))
-        , ("(;)", TScheme (Forall [TV "a"]
-                                (tArr tUnit (TVar $ TV "a"))))
-        , ("error", TScheme (Forall [TV "a"] $ tString `tArr` TVar (TV "a")))
+                                        (TVar $ TV "b")))
+        , ("(;)", Forall [TV "a"]
+                                (tArr tUnit (TVar $ TV "a")))
+        , ("error", Forall [TV "a"] $ tString `tArr` TVar (TV "a"))
+        , ("fix", Forall [TV "a"] ((TVar $ TV "a") `tArr`(TVar $ TV "a") `tArr` ((TVar $ TV "a") `tArr` (TVar $ TV "a"))) )
         ]
 
 lookupEnv :: Var -> Infer Type
@@ -165,14 +166,16 @@ lookupEnv v = do
     let res = Map.lookup v (traceMsgWith displayTypeMap ("lookup of " ++ T.unpack v) env)
     -- let res = Map.lookup v env
     case res of
-        Just (TScheme s) -> instantiate s
-        Just t -> return t
+        Just s -> instantiate s
         Nothing -> lift $ throwE (UnboundVariable v)
 
 newtype InferState = InferState Int
 
 
 type Constraint = (Type, Type)
+
+displayScheme :: Scheme -> String
+displayScheme (Forall vars t) = "∀" ++ concatMap (\(TV x) -> unpack x ++ " ") vars ++ ":" ++ displayType t
 
 displayConstraint :: Constraint -> String
 displayConstraint (t1, t2) = displayType t1  ++ "~~" ++ displayType t2
@@ -184,8 +187,11 @@ displaySubst :: Subst -> String
 displaySubst env = "[" ++ Map.foldrWithKey (\(TV name) tp acc -> printf "%s -> %s, \n%s" name (displayType tp) acc) "]" env
 
 
-displayTypeMap :: Map.Map Var Type -> String 
-displayTypeMap env = "[" ++ Map.foldrWithKey (\name tp acc -> printf "%s : %s, \n%s" name (displayType tp) acc) "]" env
+displayTypeMap :: Map.Map Var Scheme -> String 
+displayTypeMap env = 
+    "[" ++ 
+    Map.foldrWithKey 
+        (\name tp acc -> printf "%s : %s, \n%s" name (displayScheme tp) acc) "]" env
 
 type Infer  = (RWST
                 TypeEnv
@@ -218,12 +224,10 @@ class Substitutable a where
 
 instance Substitutable Type where
     apply s t@(TVar a) = Map.findWithDefault t a s
-    apply s (TScheme sc) = TScheme $ apply s sc
     apply s (TCon c) = TCon c
     apply s (TApp t1 t2) = TApp (apply s t1) (apply s t2)
 
     ftv (TVar a) = Set.singleton a
-    ftv (TScheme sc) = ftv sc
     ftv (TCon _) = Set.empty
     -- TODO: Something fishy here, don't know how type applications should work yet
     ftv (TApp t1 t2) = ftv t1 `Set.union` ftv t2
@@ -280,27 +284,24 @@ instantiate (Forall frees t) = do
     let subst = Map.fromList $ zip frees frees'
     return $ apply subst t
 
-instantiate' :: Type -> Infer Type
-instantiate' (TScheme s) = instantiate s
-instantiate' t = return t
 
 generalize :: TypeEnv -> Type -> Scheme
 generalize env t = Forall frees t
     where frees = Set.elems $ ftv t `Set.difference` ftv env
 
-generalize' :: TypeEnv -> Type -> Type
-generalize' env t =
-    if null frees then
-        t
-    else
-        TScheme $ Forall frees t
-    where
-        frees = Set.elems $ ftv t `Set.difference` ftv env
+-- generalize' :: TypeEnv -> Type -> Type
+-- generalize' env t =
+--     if null frees then
+--         t
+--     else
+--         TScheme $ Forall frees t
+--     where
+--         frees = Set.elems $ ftv t `Set.difference` ftv env
 
 
-inExtended :: (Var, Type) -> Infer a -> Infer a
-inExtended (x, t) m = do
-    let modScope env = extend env (x, t)
+inExtended :: (Var, Scheme) -> Infer a -> Infer a
+inExtended (x, s) m = do
+    let modScope env = extend env (x, s)
     local modScope m
 
 litType :: Lit -> Type
@@ -329,12 +330,12 @@ inferSB = inner . unwrap . coerceAnnotation where
     inner (Let (PVar x) e1 e2) = do
         env <- ask
         binder@(t1 :< _) <- inner (unwrap e1)
-        let TypeEnv (e, _)= env
-            genenv = case Map.lookup x e of 
-                Just v -> extend env (x, (trace "GOT THIS STUPID VALUE" v))
-                Nothing -> env
-        let schema = generalize genenv t1
-        res@(rt :< _) <- inExtended (x, TScheme schema) (inner $ unwrap e2)
+        -- let TypeEnv (e, _)= env
+        --     genenv = case Map.lookup x e of 
+        --         Just v -> extend env (x, (trace "GOT THIS STUPID VALUE" v))
+        --         Nothing -> env
+        let schema = generalize env t1
+        res@(rt :< _) <- inExtended (x, schema) (inner $ unwrap e2)
         return $ rt :< Let (PVar x) binder res
 
     inner (Let PNull e1 e2) = do
@@ -347,7 +348,7 @@ inferSB = inner . unwrap . coerceAnnotation where
 
     inner (Lambda (PVar x) e) = do
         tp <- fresh
-        res@(rt :< _) <- inExtended (x, tp) (inner $ unwrap e)
+        res@(rt :< _) <- inExtended (x, Forall [] tp) (inner $ unwrap e)
         return $ tArr tp rt :< Lambda (PVar x) res
 
     inner (Lambda _ e) = undefined
@@ -360,18 +361,18 @@ inferSB = inner . unwrap . coerceAnnotation where
         tt ~~ tf
         return $ tt :< Cond trcond trtrue trfalse
 
-    inner (LFix name e) = do
+    inner (LFix e) = do
         tres <- fresh
-        trlam@(ltype :< _) <- inExtended (name, tres) (inner $ unwrap e)
+        trlam@(ltype :< _) <- inner $ unwrap e
         -- ltype ~~ TArr (TArr tres tres) tres
-        ltype ~~ tres
-        return $ tres :< LFix name trlam
+        ltype ~~ (tres `tArr` tres)
+        return $ tres :< LFix trlam
 
     inner (Switch e arms) = do
         matchee@(subtype :< _) <- inner $ unwrap e
         nonGenPattype <- getPatType (map fst arms)
         env <- ask
-        pattype <- instantiate' $ generalize' env (traceMsgWith displayType "Got pattern type" nonGenPattype)
+        pattype <- instantiate $ generalize env (traceMsgWith displayType "Got pattern type" nonGenPattype)
         subtype ~~ pattype
         tres <- fresh
         let armLabels = map fst arms
@@ -396,12 +397,11 @@ inferSB = inner . unwrap . coerceAnnotation where
             getConType cname = do
                 res <- asks (Map.lookup cname . fst . unTypeEnv)
                 case res of
-                    Just t -> return $ getRetType t
+                    Just (Forall _ t) -> return $ getRetType t
                     Nothing -> lift $ throwE $ MiscError "aaaaaaaaaa"
 
             getRetType (TApp (TApp (TCon c) t2) t) | c == cArrow = getRetType t
             -- getRetType (TScheme (Forall vars t)) = TScheme (Forall vars (getRetType t))
-            getRetType (TScheme (Forall vars t)) = getRetType t
             getRetType t = t
 
             typeEquality :: Type -> Type -> Bool
@@ -470,7 +470,7 @@ inferProg (Prog datas lets) = do
         tv <- fresh
         case pat of
             C.PNull -> return acc
-            C.PVar name -> return $ Map.insert name (trace (show name ++  " gets " ++ show tv) tv) acc
+            C.PVar name -> return $ Map.insert name (trace (show name ++  " gets " ++ show tv) $ Forall [] tv) acc
             C.PCon _ _ -> error "TODO"
         )
         beginEnv
@@ -480,7 +480,8 @@ inferProg (Prog datas lets) = do
 
     typedLets <-mapM (\(Simple pat te) -> do
              tv <- case pat of
-                 C.PVar name -> local (const tEnv') $ asks (fromJust . Map.lookup name . fst . unTypeEnv)
+                --  C.PVar name -> local (const tEnv') $ asks (fromJust . Map.lookup name . fst . unTypeEnv)
+                 C.PVar name -> local (const tEnv') $ lookupEnv name
                  C.PNull -> fresh
                  C.PCon _ _ -> error "TODO"
 

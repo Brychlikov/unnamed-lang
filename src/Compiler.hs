@@ -48,7 +48,7 @@ markTailCalls = aux NonTail where
     -- TODO: I miss some tail calls here, eg
     -- let x = f 10 in x
     aux tail (t :< (Let pat e1 e2)) = (tail, t) :< Let pat (aux NonTail e1) (aux tail e2)
-    aux tail (t :< (LFix n e)) = (tail, t) :< LFix n (aux NonTail e)
+    aux tail (t :< (LFix e)) = (tail, t) :< LFix (aux NonTail e)
     aux tail (t :< (Lambda pat e)) = (tail, t) :< Lambda pat (aux Tail e)
     aux tail (t :< (Cond ec et ef)) = (tail, t) :< Cond (aux NonTail ec) (aux tail et) (aux tail ef)
     aux tail (t :< (Switch e arms)) = (tail, t) :< Switch (aux NonTail e) (map (second (aux tail)) arms)
@@ -133,7 +133,11 @@ compile (t :< (Let (C.PVar name) e1 e2)) = do
 
 
 
-compile (t :< LFix name e) = compile e
+compile (t :< LFix e) = 
+    case e of 
+        (_ :< Lambda _ e2) -> compile e2
+        _ -> error "unreachable"
+
 compile (t :< Lambda (C.PVar name) e) = do
     tell "function("
     tell name

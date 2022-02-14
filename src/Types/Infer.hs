@@ -455,7 +455,7 @@ tryTE :: Either TypeError a -> Infer a
 tryTE (Right a) = return a
 tryTE (Left err) = lift $ throwE err
 
-inferProg :: Prog -> Infer ([DataDecl], [LetBindingF TypedExpr])
+inferProg :: Prog -> Infer ([DataDecl], [LetBindingF (AnnotatedExpr ())])
 inferProg (Prog datas lets) = do
 
     TypeEnv (ts, defCs) <- ask
@@ -478,23 +478,24 @@ inferProg (Prog datas lets) = do
 
     let tEnv' = TypeEnv (beginEnv', cons)
 
-    typedLets <-mapM (\(Simple pat te) -> do
-             tv <- case pat of
-                --  C.PVar name -> local (const tEnv') $ asks (fromJust . Map.lookup name . fst . unTypeEnv)
-                 C.PVar name -> local (const tEnv') $ lookupEnv name
-                 C.PNull -> fresh
-                 C.PCon _ _ -> error "TODO"
+    -- typedLets <-mapM (\(Simple pat te) -> do
+    --          tv <- case pat of
+    --             --  C.PVar name -> local (const tEnv') $ asks (fromJust . Map.lookup name . fst . unTypeEnv)
+    --              C.PVar name -> local (const tEnv') $ lookupEnv name
+    --              C.PNull -> fresh
+    --              C.PCon _ _ -> error "TODO"
 
-             res <- lift $ runInfer' tEnv'  $ inferSB te
-             nonGenType :< resTree <- local (const tEnv') $ inferSB te
-            --  let tres = generalize' tEnv' nonGenType
-            --  tres <- instantiate' $ generalize' tEnv' nonGenType
-            --  let tres = trace (show (ftv tEnv')) $ traceMsgWith displayType "nonGenType is " nonGenType
-             let tres = nonGenType
-             tv ~~ tres
-             return $ Simple pat (tres :< resTree)
-             )
-           lets
+    --          res <- lift $ runInfer' tEnv'  $ inferSB te
+    --          nonGenType :< resTree <- local (const tEnv') $ inferSB te
+    --         --  let tres = generalize' tEnv' nonGenType
+    --         --  tres <- instantiate' $ generalize' tEnv' nonGenType
+    --         --  let tres = trace (show (ftv tEnv')) $ traceMsgWith displayType "nonGenType is " nonGenType
+    --          let tres = nonGenType
+    --          tv ~~ tres
+    --          return $ Simple pat (tres :< resTree)
+    --          )
+    --        lets
+    let typedLets = map (fmap coerceAnnotation) lets
     return (datadecls, typedLets)
 
 runInfer' :: TypeEnv -> Infer a -> Except TypeError ([Constraint], a, TypeEnv)
@@ -587,10 +588,10 @@ traceType :: LetBindingF TypedExpr -> LetBindingF TypedExpr
 traceType l@(Simple (PVar name) (t :< _)) = trace (printf "%s: %s" name (displayType t)) l
 traceType l = l
 
-typeProg :: Prog -> Except TypeError ([DataDecl], [LetBindingF TypedExpr])
+typeProg :: Prog -> Except TypeError ([DataDecl], [LetBindingF (AnnotatedExpr ())])
 typeProg p@(Prog datas lets) = do
     (constraints, (evaledDatas, typedLets), _) <- runInfer $ inferProg p
-    subst <- runSolver (traceMsgWith displayConstraints "generated constraints" constraints)
-    let solvedLets = apply subst typedLets
-    return (evaledDatas, map traceType solvedLets)
+    -- subst <- runSolver (traceMsgWith displayConstraints "generated constraints" constraints)
+    -- let solvedLets = apply subst typedLets
+    return (evaledDatas, typedLets)
 

@@ -2,7 +2,8 @@ module Compiler where
 
 import Ast.Normal
 import Types
-import Types.Infer
+-- import Types.Infer
+import Types.NewInfer
 import Control.Monad.Trans.Writer
 import Control.Comonad.Identity (Identity, runIdentity)
 import qualified Data.Text as T
@@ -27,23 +28,23 @@ data Tail = Tail | NonTail deriving Show
 
 data ProcessedProg = ProcessedProg
     { decls        :: [DataDecl]
-    , lets         :: [LetBindingF (AnnotatedExpr (Tail, Type))]
+    , lets         :: [LetBindingF (AnnotatedExpr (Tail, ()))]
     }
 
 process :: Prog -> Either TypeError ProcessedProg
 process prog@(Prog datas lets) = do
-    (decls, noTailCallLets) <- runExcept $ typeProg prog
+    (decls, noTailCallLets, env) <- runExcept $ typeProg prog
     let lets = map (fmap markTailCalls) noTailCallLets
-    return $ ProcessedProg decls lets
+    return $ ProcessedProg decls (seq env lets)
 
 
-markTailCalls :: TypedExpr -> AnnotatedExpr (Tail, Type)
+markTailCalls :: Show a => AnnotatedExpr a -> AnnotatedExpr (Tail, a)
 markTailCalls = aux NonTail where
     aux tail (t :< (Const l)) = (NonTail, t) :< Const l
     aux tail (t :< (Var v)) = (NonTail, t) :< Var v
     -- you may not like it, but this is what peak performance looks like
     aux tail (t :< (Call (t1 :< Call (t11 :< Var "(;)") e1) e2)) 
-           = (tail, t) :< Call ((NonTail, t1) :< Call ((NonTail, t11) :< Var "(;)") (aux NonTail e1)) (traceShowId $ aux tail e2)
+           = (tail, t) :< Call ((NonTail, t1) :< Call ((NonTail, t11) :< Var "(;)") (aux NonTail e1)) (aux tail e2)
     aux tail (t :< (Call e1 e2)) = (tail, t) :< Call (aux NonTail e1) (aux NonTail e2)
     -- TODO: I miss some tail calls here, eg
     -- let x = f 10 in x
@@ -102,7 +103,7 @@ surroundQuotes = surround "\"" "\""
 stringLiteral :: T.Text -> Comp ()
 stringLiteral lit = surround "\"" "\"" (tell lit)
 
-compile :: AnnotatedExpr (Tail, Type) -> Comp ()
+compile :: AnnotatedExpr (Tail, ()) -> Comp ()
 compile (t :< Const lit) = emitLit lit
 compile (t :< Var  name) = tell $ nameToJs name
 compile ((Tail, t) :< (Call e1 e2)) = do
@@ -280,7 +281,7 @@ compileDataDecl (DataDecl con tp condecls) = do
                 (emitInstanceObj coname (vars coname ts)) 
 
 
-compileLetDecl :: LetBindingF (AnnotatedExpr (Tail, Type)) -> Comp ()
+compileLetDecl :: LetBindingF (AnnotatedExpr (Tail, ())) -> Comp ()
 compileLetDecl (Simple (C.PVar name) e) = do
     tell "let "
     tell name
@@ -292,6 +293,11 @@ compileLetDecl (Simple (C.PNull) e) = do
     compile e 
     tell ";"
 
+compileLetDecl (Rec lets) = do 
+    mapM_ compileLetDecl lets
+
+compileLetDecl (Simple (C.PCon _ _) e) = error "Destructuring didn't cut it"
+
 
 
 compileProcessed :: ProcessedProg -> Comp ()
@@ -299,11 +305,13 @@ compileProcessed (ProcessedProg datas lets) = do
     mapM_ compileDataDecl datas
     mapM_ compileLetDecl lets
 
-compileSrc :: T.Text -> Either String T.Text
-compileSrc s = do
-    p <- first errorBundlePretty $ runParser Parser.pExpr "src" s
-    let tree = lower p
-    bimap show (snd . runIdentity . runWriterT . compile . markTailCalls) $ runExcept (typeExpr tree)
+-- compileSrc :: T.Text -> Either String T.Text
+-- compileSrc s = do
+--     p <- first errorBundlePretty $ runParser Parser.pExpr "src" s
+--     let tree = lower p
+--     bimap show 
+--           (snd . runIdentity . runWriterT . compile . markTailCalls . fmap (const ())) 
+--           $ runExcept (typeExpr tree)
 
 compileProgSrc :: T.Text -> Either String T.Text 
 compileProgSrc s = do 
@@ -327,12 +335,12 @@ runJSCode t = shelly $ print_stdout False $  do
     setStdin t
     run "node" []
 
-runCompiledExpr :: T.Text -> IO T.Text
-runCompiledExpr s = do
-    prelude <- readFile "std.js"
-    case compileSrc s of
-        Left err -> return $ T.pack err
-        Right js -> runJSCode (prelude `T.append` js)
+-- runCompiledExpr :: T.Text -> IO T.Text
+-- runCompiledExpr s = do
+--     prelude <- readFile "std.js"
+--     case compileSrc s of
+--         Left err -> return $ T.pack err
+--         Right js -> runJSCode (prelude `T.append` js)
 
 
 runCompiledStd :: T.Text -> IO (Either String T.Text)

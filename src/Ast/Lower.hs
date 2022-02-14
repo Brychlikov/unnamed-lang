@@ -68,10 +68,15 @@ partitionWith pred = inner ([], []) where
         Left el  -> inner (el:l, r) xs
         Right el -> inner (l, el:r) xs
 
+
+lowerLetBinding :: F.LetBinding  -> LetBindingF Expr
+lowerLetBinding (F.Simple pat e) = Simple pat (lower e)
+lowerLetBinding (F.FunBinding name pats e) = Simple (PVar name) ((lambdaFlatten pats . lower) e)
+
+
 lowerProg :: F.Prog -> Prog
 lowerProg (F.Prog decls) = Prog datas lets where
     (datas, lets) = partitionWith pred decls
-    pred (F.LDecl (F.Simple pat e)) = Right (Simple pat (lower e))
-    pred (F.LDecl (F.FunBinding name pats e)) =
-         Right $ Simple (PVar name) ((lambdaFlatten pats . lower) e)
+    pred (F.LDecl b) = Right $ lowerLetBinding b
+    pred (F.RDecl lets) = Right (Rec $ map lowerLetBinding lets)
     pred (F.DDecl d) = Left d

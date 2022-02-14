@@ -64,6 +64,5 @@ tests:
     - lang
   spec: 
     defaults: hspec/hspec@master 
-    sependencies: strip
     dependencies:
     - lang

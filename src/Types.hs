@@ -170,6 +170,7 @@ displayType :: Type -> String
 displayType (TVar (TV x)) =  unpack x
 -- displayType (TArr t1 t2) = "(" ++ displayType t1 ++ "->" ++ displayType t2 ++ ")"
 displayType (TCon constr) = (unpack . name) constr
+displayType (TApp (TApp (TCon c) t1) t2) | c == cArrow = "(" ++ displayType t1 ++  "->" ++ displayType t2 ++ ")"
 displayType (TApp t1 t2) = "(" ++ displayType t1 ++  " " ++ displayType t2 ++ ")"
 
     -- annotateM :: (Functor f, Monad m) => (f (m (Cofree f a)) -> m )

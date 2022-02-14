@@ -1,0 +1,25 @@
+
+# listy i funkcje biblioteczne
+
+# let l = [1, 2, 3, 4]
+# 
+# let length2 acc xs = match xs with 
+# | Empty    -> acc
+# | Cons _ t -> length2 (acc + 1) t
+# end
+# 
+# let length3 xs = length2 0 xs
+# 
+# let disc xs = match xs with 
+# | Empty -> 0
+# | Cons h t -> 1
+# end
+# 
+# let count n = 
+#     let inner n = if n == 0 then 0 else 1 + (count (n-1))
+#     in 
+#     inner n
+# let sum_l = foldr (fun x y -> x + y) 0 l 
+# 
+# let _ = println sum_l
+

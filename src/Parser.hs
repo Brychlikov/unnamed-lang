@@ -20,7 +20,7 @@ import Data.Maybe (fromMaybe)
 type Parser = Parsec Void Text
 
 keywords :: Set.Set Text
-keywords = Set.fromList ["let", "in", "fun", "if", "then", "else", "data", "match", "with", "end", "|"]
+keywords = Set.fromList ["let", "in", "fun", "if", "then", "else", "data", "match", "with", "end", "and", "|"]
 
 reserved :: Set.Set Text
 reserved = Set.fromList ["true", "false"]
@@ -246,9 +246,17 @@ pDataDecl = do
   rest <- many (symbol "|" *> pConDecl)
   return $ DataDecl name typeVars (first : rest)
 
+pRecDecl :: Parser [LetBinding ] 
+pRecDecl = do 
+  try (symbol "let" *> symbol "rec")
+  first  <- pLetBinding
+  rest <- some (symbol "and" *> pLetBinding)
+  return (first : rest)
+
 pDecl :: Parser Decl
 pDecl = choice
   [ DDecl <$> pDataDecl
+  , RDecl <$> pRecDecl
   , LDecl <$> (symbol "let" *> pLetBinding)
   ]
 

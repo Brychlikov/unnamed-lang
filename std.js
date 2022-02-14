@@ -100,22 +100,39 @@ function charList(str) {
     return res;
 } 
 
+function numToChar(num) {
+    return String.fromCharCode(num);
+}
+
 function error(t) {
     throw new Error(t);
 }
 
+
+// Nie będziemy już wywoływać funkcji wprost
+// zamiast tego f(x) tłumaczymy na:
+
+// jump(f, x)       - dla wywołań ogonowych
+// trampoline(f, x) - dla reszty
+
 function jump(func, ...args) {
+    // nie wywołujemy funkcji, zamiast tego zwracamy sentinela
+    // zawierającego funkcję i argument
     return { yip: "yip", func, args };
 }
 
 
 function trampoline(func, ...args) {
     let res = func(...args);
+    // wywołujemy zadaną funkcję, aż dostaniemy prawdziwą wartość
     while(res.yip === "yip") {
         let {func, args} = res;
         res = func (...args);
     }
+
+    // trampolina zwraca prawdziwe wartości
     return res;
 }
+
 
 

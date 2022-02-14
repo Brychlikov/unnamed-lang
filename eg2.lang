@@ -1,0 +1,20 @@
+data Tree a
+= Leaf 
+| Node (Tree a) a (Tree a)
+
+let foldTree f lv t = match t with 
+| Leaf       -> lv 
+| Node l a r -> f (foldTree f lv l) a (foldTree f lv r)
+end
+
+let sumTree t = foldTree (fun x y z -> x + y + z) 0 t
+
+let flattenTree t = foldTree (fun x y z -> (append x (Cons y z))) [] t
+
+let tree = Node
+    (Node (Node Leaf 1 Leaf) 2 (Node Leaf 5 Leaf))
+    8
+    (Node Leaf 10 Leaf)
+
+let x = println (sumTree tree)
+let x2 = printList (flattenTree tree)

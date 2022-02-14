@@ -25,6 +25,7 @@ data LetBinding
 
 data Decl
     = LDecl LetBinding 
+    | RDecl [LetBinding]
     | DDecl  DataDecl
     deriving (Eq, Show)
 

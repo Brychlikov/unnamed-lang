@@ -9,7 +9,7 @@ data Option a
 let length xs = 
     let inner acc xs = match xs with 
     | Empty    -> acc
-    | Cons _ t -> inner (acc + 1) t
+    | Cons h t -> inner (acc + 1) t
     end
     in 
     inner 0 xs
@@ -38,6 +38,11 @@ let foldr f i xs = match xs with
 | Cons h t -> f h (foldr f i t)
 end
 
+let foldr2 f i xs = if isEmpty xs then i else 
+    let h = getCons0 xs in 
+    let t = getCons1 xs in 
+    f h (foldr2 f i t)
+
 let reverse xs = 
     let inner acc ys = match ys with 
     | Empty -> acc 
@@ -59,6 +64,8 @@ let printList xs =
     end 
     in 
     print "["; inner xs
+
+
 
 let showList xs = 
     let inner xs = match xs with 

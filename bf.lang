@@ -36,24 +36,74 @@ let parseSingle c =
     if c == "-" then Dec else 
     if c == "." then Out else error "unknown command"
 
+
+
 let parseBF cs = match cs with 
 | Empty -> [] 
 | Cons h t -> 
     let r = takeUntil (fun c -> c == "[") cs  in 
     let cmds = map parseSingle (fst r) in 
-#    let r2 = takeUntil (fun c -> c == "]") (snd r) in 
-#    let whileCmd = While (map parseSingle (fst r2)) in 
-#    let rest = parseBF (snd r2) in 
-    error "whatever"
-#    append cmds (Cons whileCmd rest)
+
+    if isEmpty (snd r) then cmds else 
+
+    let r2 = takeUntil (fun c -> c == "]") (snd r) in 
+    let whileCmd = While (map parseSingle (fst r2)) in 
+    let rest = parseBF (snd r2) in 
+    append cmds (Cons whileCmd rest)
 end
-# 
-# 
-# let r = takeUntil (fun c -> c == "[") cs
 
-# let cs = charList "++->-"
-# let _ = println (showBFs (map parseSingle cs))
+let moveLeft tape =  
+    let left = fst tape in 
+    let x = fst (snd tape) in 
+    let right = snd (snd tape) in 
+    match left with 
+    | Empty -> ([], 0, (Cons x right))
+    | Cons h t -> (t, h, (Cons x right))
+    end
 
-let _ = println "witam"
-# 
-# let  _ = println (showBFs [MoveL, MoveL, Inc, While [Inc]])
+let moveRight tape =  
+    let left = fst tape in 
+    let x = fst (snd tape) in 
+    let right = snd (snd tape) in 
+    match right with 
+    | Empty -> ((Cons x left), 0, [])
+    | Cons h t -> ((Cons x left), h, t)
+    end
+
+let rec evalBFTape tape bf = match bf with 
+| MoveL -> moveLeft  tape 
+| MoveR -> moveRight tape 
+| Inc   ->  
+    let left = fst tape in 
+    let x = fst (snd tape) in 
+    let right = snd (snd tape) in 
+    (left, x + 1, right)
+| Dec   ->  
+    let left = fst tape in 
+    let x = fst (snd tape) in 
+    let right = snd (snd tape) in 
+    (left, x - 1, right)
+| Out   -> 
+    let x = fst (snd tape) in 
+    print (numToChar x); tape
+| While bfs -> 
+    let x = fst (snd tape) in 
+    if x == 0 then 
+        tape
+    else 
+        let newTape = evalBFSTape tape bfs in 
+        evalBFTape newTape (While bfs)
+end
+
+and evalBFSTape tape bfs = match bfs with 
+| Empty -> tape 
+| Cons h t -> let newTape = evalBFTape tape h in evalBFSTape newTape t
+end
+
+let evalBFS bfs = evalBFSTape ([], 0, []) bfs
+
+    
+ 
+let cs = charList "++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>."
+
+let pff = evalBFS (parseBF cs)

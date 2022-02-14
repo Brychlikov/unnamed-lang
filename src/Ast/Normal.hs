@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveFunctor, DeriveFoldable, TemplateHaskell #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, TemplateHaskell #-}
 module Ast.Normal where 
 
 import Data.Text(Text)
@@ -19,12 +19,13 @@ data ExprF a
     | Lambda Pattern a
     | Cond a a a 
     | Switch a [(Text, a)]
-    deriving (Eq, Show, Functor, Foldable)
+    deriving (Eq, Show, Functor, Foldable, Traversable)
 $(deriveShow1 ''ExprF)
 $(deriveEq1 ''ExprF)
 
 data LetBindingF a
     = Simple Pattern a
+    | Rec    [LetBindingF a]
     deriving (Eq, Show, Functor, Foldable)
 -- | FunBinding Text Pattern a 
 

@@ -8,7 +8,7 @@ import Data.Text ( Text )
 import Parser
 import Ast.Full
 import Ast.Common
-import Types.Infer (displayConstraints)
+import Types.NewInfer (displayConstraints)
 
 eParsesTo :: Text -> Expr -> Expectation
 eParsesTo s ast = parse pExpr "" s `shouldParse` ast

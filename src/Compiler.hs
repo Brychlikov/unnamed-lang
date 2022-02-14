@@ -305,13 +305,13 @@ compileProcessed (ProcessedProg datas lets) = do
     mapM_ compileDataDecl datas
     mapM_ compileLetDecl lets
 
--- compileSrc :: T.Text -> Either String T.Text
--- compileSrc s = do
---     p <- first errorBundlePretty $ runParser Parser.pExpr "src" s
---     let tree = lower p
---     bimap show 
---           (snd . runIdentity . runWriterT . compile . markTailCalls . fmap (const ())) 
---           $ runExcept (typeExpr tree)
+compileSrc :: T.Text -> Either String T.Text
+compileSrc s = do
+    p <- first errorBundlePretty $ runParser Parser.pExpr "src" s
+    let tree = lower p
+    bimap show 
+          (snd . runIdentity . runWriterT . compile . markTailCalls . fmap (const ())) 
+          $ runExcept (typeExpr tree)
 
 compileProgSrc :: T.Text -> Either String T.Text 
 compileProgSrc s = do 
@@ -335,12 +335,12 @@ runJSCode t = shelly $ print_stdout False $  do
     setStdin t
     run "node" []
 
--- runCompiledExpr :: T.Text -> IO T.Text
--- runCompiledExpr s = do
---     prelude <- readFile "std.js"
---     case compileSrc s of
---         Left err -> return $ T.pack err
---         Right js -> runJSCode (prelude `T.append` js)
+runCompiledExpr :: T.Text -> IO T.Text
+runCompiledExpr s = do
+    prelude <- readFile "std.js"
+    case compileSrc s of
+        Left err -> return $ T.pack err
+        Right js -> runJSCode (prelude `T.append` js)
 
 
 runCompiledStd :: T.Text -> IO (Either String T.Text)

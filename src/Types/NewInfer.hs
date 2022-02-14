@@ -317,24 +317,17 @@ ti env = inner env . unwrap . coerceAnnotation where
             ty1' = apply s2 ty1
             ty2' = apply nullSubst ty2
             s4   = s3 `composeSubst` s2 `composeSubst` s1
-            tres = apply (trace ("got substitution: " ++ displaySubst s4) s4) tv
-        return (s4, trace ("Inside call: " ++
-                           displayTypeMap (apply s4 tenv) ++
-                           " and result type is " ++
-                           displayType tres ++
-                           " and type of e1 is " ++
-                           displayType ty1 ++
-                           " and type of e2 is " ++
-                           displayType ty2) tres:< tree)
+            tres = apply s4 tv
+        return (s4, tres:< tree)
 
     inner env (Let (PVar x@"t") e1 e2) = do
         (s1, binder@(t1 :< _)) <- inner env (unwrap e1)
-        let t1'  = generalize (apply s1 env) (trace ("before " ++ displayType t1) t1)
+        let t1'  = generalize (apply s1 env) t1
         -- let t1'  = generalize (apply s1 env) t1
-            env' = extend (trace ("current subst: " ++ displaySubst s1)env) (x, trace ("after " ++ displayScheme t1') t1')
+            env' = extend env (x, t1')
             env'' = apply s1 env'
         (s2, res@(t2 :< _)) <- inner env'' (unwrap e2)
-        let s3 = traceMsgWith displaySubst "let subst 3" (traceMsgWith displaySubst "let subst 1" s1 `composeSubst` traceMsgWith displaySubst "let subst 2" s2)
+        let s3 = s1 `composeSubst` s2
         return (s3, apply s3 t2 :< Let (PVar x) binder res)
         -- return (s3, (apply s3 (trace ("rsetype" ++ displayType t2) t2)) :< Let (PVar x) binder res)
 
@@ -366,42 +359,39 @@ ti env = inner env . unwrap . coerceAnnotation where
 
         s4 <- solve [(tc, tBoolean), (tt, tf)]
         let s' = foldl1 composeSubst
-                    (trace ("True branch: " ++
-                            displayType tt  ++
-                            "\nFalse branch : " ++
-                            displayType tf) (reverse [s1, (traceMsgWith displaySubst "TrueSubstitution" s2), (traceMsgWith displaySubst "False Substitution" s3), traceMsgWith displaySubst "solved subst" s4]))
+                    (reverse [s1, s2, s3, s4])
         let tree = apply s' <$> Cond trcond trtrue trfalse
-        return ((traceMsgWith displaySubst "final cond subst" s'), apply s' tt :< tree)
+        return (s', apply s' tt :< tree)
 
     inner env (LFix e) = do
         tres <- fresh
         (s1, trlam@(ltype :< _)) <- inner env $ unwrap e
-        s2 <- mgu (trace ("\n\n==========================\nfix subtype: " ++ displayType ltype) ltype) (tres `tArr` tres)
+        s2 <- mgu ltype (tres `tArr` tres)
         -- s2 <- mgu ltype (tres `tArr` tres)
         let s3 = s1 `composeSubst` s2
-        return (s3, apply s3 <$> ((apply s3 tres) :< LFix trlam))
+        return (s3, apply s3 <$> (apply s3 tres :< LFix trlam))
 
 
 
     inner env@TypeEnv{tenv, ctrs} (Switch disc arms) = do
         (s, discres@(dtype :< _)) <- inner env $ unwrap disc
-        patscheme <- getPatScheme (trace ("env in switch " ++ displayTypeMap tenv) env) (map fst arms)
-        pattype <- instantiate (trace ("disc pattype: " ++ displayScheme patscheme ++
-                                       " disc realtype " ++ displayType dtype) patscheme)
+        patscheme <- getPatScheme env (map fst arms)
+        pattype <- instantiate patscheme
         tres <- fresh
         let armLabels = map fst arms
         (s', typedArms) <- foldrM (\(n, arm) (s, arms) -> do
             (s', tpd) <- inner (apply s env) $ unwrap arm
             return (s `composeSubst` s', apply s' tpd : arms)
             ) (s, []) arms
+
         let typedArms' = apply s' typedArms
         let armTypes = map getType typedArms'
-            cs = (apply s' dtype, pattype) : map ((,) tres) (trace ("arm Types " ++ (show ( map displayType armTypes))) armTypes)
-        s'' <- solve (trace ("Constraints: " ++ displayConstraints cs) (seq (trace ("arm labels: " ++ show armLabels) ()) cs))
+            cs = (apply s' dtype, pattype) : map ((,) tres) armTypes
+        s'' <- solve cs
         let sres = s' `composeSubst` s''
         let substArms = map (fmap $ apply sres) typedArms'
         let tres' = apply sres tres
-        return (sres, trace ("switch returns with " ++ displayType tres') tres' :< Switch discres (zip armLabels substArms))
+        return (sres,  tres' :< Switch discres (zip armLabels substArms))
 
         where
             getType (t :< _) = t
@@ -469,13 +459,12 @@ inferLetDecls TypeEnv{tenv, ctrs} lets = do
         cs = map (second snd) (zip tvars results)
 
 
-
     solved <- solve (apply s cs)
     let s' = s `composeSubst` solved
         solvedTs = map (apply s' . snd) results
         env'' = apply s' env'
         genedTs = case lets of
-            [Simple(PVar "foldr") _] -> let TypeEnv{tenv=tenv''} = head generalizationEnvs in trace (displayTypeMap  tenv'' ++ "\n" ++ (displayType $ head solvedTs)) $ map (uncurry generalize) $ zip generalizationEnvs solvedTs
+            [Simple(PVar "foldr") _] -> map (uncurry generalize) $ zip generalizationEnvs solvedTs
             _ -> map (uncurry generalize) $ zip generalizationEnvs solvedTs
         resExt = [(n, t) | (Simple (PVar n) _, t) <- zip lets genedTs]
         resEnv = TypeEnv (Map.fromList resExt `Map.union` tenv) ctrs
@@ -518,6 +507,13 @@ typeProg :: Prog -> Except TypeError ([DataDecl], [LetBindingF (AnnotatedExpr ()
 typeProg p@(Prog datas lets) = do
     (evaledDatas, env) <- runInfer $ inferProg p
     let resLets = map (fmap coerceAnnotation) lets
-    return (evaledDatas, resLets, (trace (displayTypeMap (tenv env)) env))
+
+    -- return (evaledDatas, resLets, (trace (displayTypeMap (tenv env)) env))
+    return (evaledDatas, resLets,  env)
+
+typeExpr :: Expr -> Except TypeError TypedExpr 
+typeExpr e = do 
+    (_, texpr) <- runInfer $ ti startingEnv e
+    return texpr
 
 

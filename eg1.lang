@@ -5,7 +5,7 @@ let l = [1, 2, 3, 4]
 
 let sum_l = foldr (fun x y -> x + y) 0 l 
 
-let _ = println sum_l
+let x = println sum_l
 
 
 let addNums x y = x + y
@@ -13,7 +13,7 @@ let addNums x y = x + y
 # automatyczna częściowa aplikacja
 let l2 = map (addNums 5) l 
 
-let _ = printList l2
+let x2 = printList l2
 
 
 # Mamy rekursję ogonową! 
@@ -25,13 +25,13 @@ let count acc n =
         count (acc + 1)  (n- 1)
 
 # I to nawet wzajemną
-# let even n = 
-#     if n == 0 then true 
-#     else odd (n-1)
-# 
-# let odd n = 
-#     if n == 0 then false
-#     else even (n-1)
+let rec even n = 
+    if n == 0 then true 
+    else odd (n-1)
 
-let _ = println (count 0 100000)
-# let _ = println (even 100000)
+and odd n = 
+    if n == 0 then false
+    else even (n-1)
+
+let x3 = println (count 0 100000)
+let x4 = println (even 100000)

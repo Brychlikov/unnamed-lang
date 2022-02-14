@@ -20,7 +20,7 @@ import Data.Fix
 import Text.ParserCombinators.ReadP (many1)
 import Ast.Lower (lower)
 import Types
-import Types.Infer
+import Types.NewInfer
 import Control.Monad.Trans.Except (ExceptT)
 import qualified Control.Monad.Trans.Except as ET (throwE, runExcept, runExceptT)
 

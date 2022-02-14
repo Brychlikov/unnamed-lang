@@ -15,6 +15,7 @@ let tree = Node
     (Node (Node Leaf 1 Leaf) 2 (Node Leaf 5 Leaf))
     8
     (Node Leaf 10 Leaf)
+    
 
 let x = println (sumTree tree)
 let x2 = printList (flattenTree tree)
